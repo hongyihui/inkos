@@ -27,6 +27,8 @@ Open-source AI Agent that autonomously writes, audits, and revises novels — wi
 
 **v1.3.12 Studio service links update** — adds quick links for [kkaiapi](https://en.kkaiapi.com) and OpenRouter in Studio service setup, including homepage, docs, and model pages, and renames the aggregator group to Aggregator API.
 
+**New: short fiction writing and cover generation!** — Studio chat and CLI can now create a standalone short-fiction package: complete draft, outline and review records, synopsis, selling points, cover prompt, and an optional generated cover image when a cover provider is configured.
+
 **Native English novel writing now supported！** — 10 built-in English genre profiles with dedicated pacing rules, fatigue word lists, and audit dimensions. Set `--lang en` and go.
 
 ## Quick Start
@@ -148,6 +150,31 @@ inkos export my-book --format epub  # Export EPUB (read on phone/Kindle)
 ```
 
 Language is set per-genre by default. Override explicitly with `--lang en` or `--lang zh`. Use `inkos genre list` to see all available genres and their default languages.
+
+### Write Short Fiction and Generate Covers
+
+In Studio chat, ask for a complete short-fiction deliverable:
+
+```text
+Write a 12-chapter short fiction piece about a modern marriage reversal where the heroine wins with hard evidence.
+```
+
+Or run it from the CLI:
+
+```bash
+inkos short run \
+  --direction "modern short fiction marriage reversal evidence-driven heroine" \
+  --chapters 12 \
+  --chars 1000
+```
+
+Outputs are saved under `shorts/<story-name>/final/`, including `full.md`, `sales-package.md`, `cover-prompt.md`, and `cover.png` when cover generation is configured.
+
+To generate only a cover for an existing title or synopsis, ask Studio chat directly:
+
+```text
+Generate a short-fiction cover for "The Divorce Papers He Regretted", modern city, high-drama reversal.
+```
 
 <p align="center">
   <img src="assets/screenshot-terminal.png" width="700" alt="Terminal screenshot">
