@@ -222,7 +222,7 @@ inkos export 吞天魔帝          # 导出全书
 inkos export 吞天魔帝 --format epub  # 导出 EPUB（手机/Kindle 阅读）
 ```
 
-### 写短篇与制作封面
+### 写完整短篇
 
 想直接生成一篇完整短篇，可以在 Studio 对话里说：
 
@@ -241,11 +241,15 @@ inkos short run \
 
 生成物会落在 `shorts/<故事名>/final/`，包含 `full.md`、`sales-package.md`、`cover-prompt.md`，配置封面服务后还会生成 `cover.png`。
 
-如果只想给已有标题或简介做封面，在 Studio 对话里直接说：
+### 单独制作封面
+
+如果只想给已有标题或简介做封面，不需要重跑短篇正文，在 Studio 对话里直接说：
 
 ```text
 给《她签下离婚协议那天，他悔疯了》生成一张短篇封面，偏现代都市、强反转。
 ```
+
+封面工具会独立生成 `covers/<标题>/cover-prompt.md` 和 `covers/<标题>/cover.png`。如果还没有配置封面服务，先在 Studio 的模型配置里设置封面服务和 API Key。
 
 <p align="center">
   <img src="assets/screenshot-terminal.png" width="700" alt="终端截图">

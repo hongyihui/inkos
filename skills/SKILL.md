@@ -1,7 +1,7 @@
 ---
 name: inkos
-description: Autonomous novel writing CLI agent with web workbench (InkOS Studio) - use for creative fiction writing, novel generation, style imitation, chapter continuation/import, EPUB export, AIGC detection, and fan fiction. Native English support with 10 built-in English genre profiles (LitRPG, Progression Fantasy, Isekai, Cultivation, System Apocalypse, Dungeon Core, Romantasy, Sci-Fi, Tower Climber, Cozy Fantasy). Also supports Chinese web novel genres (xuanhuan, xianxia, urban, horror, other). Multi-agent pipeline, two-phase writer (creative + settlement), stronger long-form chapter craft rules, hook-ledger payoff checks, 33-dimension auditing, token usage analytics, creative brief input, structured logging (JSON Lines), multi-model routing, custom OpenAI-compatible provider support, and InkOS Studio web UI for visual book management, chapter review, real-time writing progress, market radar, and analytics.
-version: 2.3.3
+description: Autonomous novel writing CLI agent with web workbench (InkOS Studio) - use for creative fiction writing, standalone short-fiction packages, cover generation, novel generation, style imitation, chapter continuation/import, EPUB export, AIGC detection, and fan fiction. Native English support with 10 built-in English genre profiles (LitRPG, Progression Fantasy, Isekai, Cultivation, System Apocalypse, Dungeon Core, Romantasy, Sci-Fi, Tower Climber, Cozy Fantasy). Also supports Chinese web novel genres (xuanhuan, xianxia, urban, horror, other). Multi-agent pipeline, two-phase writer (creative + settlement), stronger long-form chapter craft rules, hook-ledger payoff checks, 33-dimension auditing, token usage analytics, creative brief input, structured logging (JSON Lines), multi-model routing, custom OpenAI-compatible provider support, and InkOS Studio web UI for visual book management, short-fiction runs, cover generation, chapter review, real-time writing progress, market radar, and analytics.
+version: 2.3.4
 metadata: { "openclaw": { "emoji": "📖", "requires": { "bins": ["inkos", "node"], "env": ["OPENAI_API_KEY"] }, "primaryEnv": "OPENAI_API_KEY", "homepage": "https://github.com/Narcooo/inkos", "install": [{ "id": "npm", "kind": "node", "package": "@actalk/inkos", "label": "Install InkOS (npm)" }] } }
 ---
 
@@ -25,6 +25,8 @@ Truth files are persisted as schema-validated JSON (`story/state/*.json`) with m
 - **Import & continue**: Import existing chapters from a text file, reverse-engineer truth files, and continue writing
 - **Style imitation**: Analyze and adopt writing styles from reference texts
 - **Spinoff writing**: Write prequels/sequels/spinoffs while maintaining parent canon
+- **Standalone short fiction**: Generate a complete short-fiction package with outline, draft, review artifacts, synopsis, selling points, and optional cover image
+- **Cover generation**: Generate or regenerate only a cover prompt and cover image from a title, synopsis, or visual direction without rerunning story writing
 - **Quality auditing**: Detect AI-generated content and perform 33-dimension quality checks
 - **Genre exploration**: Explore trends and create custom genre rules
 - **Analytics**: Track word count, audit pass rate, and issue distribution per book
@@ -343,11 +345,53 @@ inkos
 - Bilingual i18n (Chinese / English)
 - Shares the same interaction kernel as `inkos interact` and Studio
 
+### Workflow 15: Standalone Short Fiction Package
+
+Use this when the user wants a complete short story or short-fiction deliverable that is separate from the active long-form book.
+
+```bash
+inkos short run \
+  --direction "modern short fiction marriage reversal evidence-driven heroine" \
+  --chapters 12 \
+  --chars 1000
+```
+
+Outputs are written under `shorts/<story-name>/final/`:
+- `full.md` — complete short-fiction manuscript
+- `sales-package.md` — synopsis and selling points
+- `cover-prompt.md` — cover prompt
+- `cover.png` — cover image when a cover provider is configured
+
+For OpenClaw/Studio/agent orchestration, call the `short_fiction_run` tool when the user asks for a new complete short-fiction package. Do not use it for the next chapter of an existing long-form book.
+
+### Workflow 16: Standalone Cover Tool
+
+Use this when the user only wants a cover for an existing title, synopsis, or visual direction. Do not rerun the short-fiction pipeline.
+
+In Studio or agent mode, ask naturally:
+
+```text
+Generate a short-fiction cover for "The Divorce Papers He Regretted", modern city, high-drama reversal.
+```
+
+For tool-using agents, call `generate_cover` with:
+- `title` — required
+- `intro` or `sellingPoints` — optional story context
+- `coverPrompt` — optional visual direction
+- `outputDir` — optional; defaults to `covers/<title>/`
+
+The standalone cover tool writes:
+- `covers/<title>/cover-prompt.md`
+- `covers/<title>/cover.png`
+
+If cover image generation fails, report the provider/configuration error plainly. Do not rewrite the story, do not rerun `short_fiction_run`, and do not suggest unrelated external tools unless the user asks.
+
 ## InkOS Studio (Web Workbench)
 
 `inkos studio` launches a local web UI (default port 4567) that provides a visual interface for all InkOS operations:
 
 - **Book management** — create, delete, export (TXT/MD/EPUB), configure per-book settings
+- **Short fiction & cover tools** — generate independent short-fiction packages, synopsis/selling points, cover prompts, and standalone covers
 - **Chapter review & editing** — approve/reject drafts, edit content inline, multi-mode revision (polish/spot-fix/rewrite/anti-detect)
 - **Real-time writing progress** — SSE-based live updates during chapter generation
 - **Market radar** — AI-powered trend analysis with platform/genre recommendations
@@ -395,6 +439,22 @@ These tools are the preferred control surface for chapter steering:
 - `update_current_focus(bookId, content)`
   - Rewrites `story/current_focus.md`
   - Use for local steering over the next 1-3 chapters
+
+## Short Fiction and Cover Agent Tools
+
+These are the preferred tools when InkOS is driven by OpenClaw, Studio chat, or `inkos agent`:
+
+- `short_fiction_run`
+  - Creates an independent short-fiction package from a direction
+  - Runs outline → outline review/revision → full draft → draft review/revision → synopsis/selling points/cover prompt → optional cover image
+  - Writes to `shorts/<story-name>/`
+  - Use only when the user asks for a separate complete short story / short-fiction deliverable
+
+- `generate_cover`
+  - Generates only a cover prompt and cover image
+  - Writes to `covers/<title>/` by default
+  - Use when the user asks to create or regenerate a cover for an existing title, synopsis, or completed short
+  - Do not rerun story generation unless the user explicitly asks for a new story
 
 `write_truth_file` remains available for broad file edits, but prefer the dedicated control tools above for input-governance changes.
 
@@ -490,6 +550,7 @@ inkos genre copy xuanhuan
 | `inkos export` | Export finished book | Formats: txt, md, epub |
 | `inkos analytics` / `inkos stats` | View book statistics | Word count, audit rates, token usage |
 | `inkos radar scan` | Platform trend analysis | Informs new book ideas |
+| `inkos short run` | Generate standalone short fiction | Outputs manuscript, sales package, cover prompt, optional cover |
 | `inkos config set-global` | Configure LLM provider | OpenAI/Anthropic/custom (any OpenAI-compatible) |
 | `inkos config set-model <agent> <model>` | Set model override for a specific agent | `--provider`, `--base-url`, `--api-key-env` for multi-provider routing |
 | `inkos config show-models` | Show current model routing | View per-agent model assignments |

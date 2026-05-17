@@ -151,7 +151,7 @@ inkos export my-book --format epub  # Export EPUB (read on phone/Kindle)
 
 Language is set per-genre by default. Override explicitly with `--lang en` or `--lang zh`. Use `inkos genre list` to see all available genres and their default languages.
 
-### Write Short Fiction and Generate Covers
+### Write Complete Short Fiction
 
 In Studio chat, ask for a complete short-fiction deliverable:
 
@@ -170,11 +170,15 @@ inkos short run \
 
 Outputs are saved under `shorts/<story-name>/final/`, including `full.md`, `sales-package.md`, `cover-prompt.md`, and `cover.png` when cover generation is configured.
 
-To generate only a cover for an existing title or synopsis, ask Studio chat directly:
+### Generate a Standalone Cover
+
+To generate only a cover for an existing title or synopsis, do not rerun the short-fiction pipeline. Ask Studio chat directly:
 
 ```text
 Generate a short-fiction cover for "The Divorce Papers He Regretted", modern city, high-drama reversal.
 ```
+
+The cover tool writes `covers/<title>/cover-prompt.md` and `covers/<title>/cover.png`. If no cover provider is configured yet, set the cover provider and API key in Studio model settings first.
 
 <p align="center">
   <img src="assets/screenshot-terminal.png" width="700" alt="Terminal screenshot">
