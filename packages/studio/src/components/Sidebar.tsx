@@ -82,6 +82,7 @@ export function Sidebar({ nav, activePage, sse, t }: {
   const createDraftSession = useChatStore((s) => s.createDraftSession);
   const renameSession = useChatStore((s) => s.renameSession);
   const deleteSession = useChatStore((s) => s.deleteSession);
+  const setInput = useChatStore((s) => s.setInput);
   const [renameTarget, setRenameTarget] = useState<{ sessionId: string; currentTitle: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ sessionId: string; title: string } | null>(null);
@@ -201,6 +202,16 @@ export function Sidebar({ nav, activePage, sse, t }: {
     nav.toChat();
   };
 
+  const launchProjectMode = (kind: "short" | "play") => {
+    setProjectChatExpanded(true);
+    const sessionId = createDraftSession(null);
+    setProjectChatSessionId(sessionId);
+    setInput(kind === "short"
+      ? "我要做一篇 InkOS Short 短篇，方向是："
+      : "开一个 InkOS Play 互动世界，我扮演：");
+    nav.toChat();
+  };
+
   const handleRenameConfirm = async () => {
     if (!renameTarget) return;
     const nextTitle = renameValue.trim();
@@ -236,6 +247,34 @@ export function Sidebar({ nav, activePage, sse, t }: {
 
       {/* Main Navigation */}
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-6">
+        <div>
+          <div className="px-3 mb-3">
+            <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-bold">
+              创作入口
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => launchProjectMode("short")}
+              className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-left transition-all hover:border-amber-500/40 hover:bg-amber-500/15"
+            >
+              <ScrollText size={16} className="mb-2 text-amber-600 dark:text-amber-300" />
+              <div className="text-xs font-semibold text-foreground">Short</div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">短篇生产</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => launchProjectMode("play")}
+              className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-3 text-left transition-all hover:border-sky-500/40 hover:bg-sky-500/15"
+            >
+              <Gamepad2 size={16} className="mb-2 text-sky-600 dark:text-sky-300" />
+              <div className="text-xs font-semibold text-foreground">Play</div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">互动世界</div>
+            </button>
+          </div>
+        </div>
+
         {/* Books Section */}
         <div>
           <div className="px-3 mb-3 flex items-center justify-between">
@@ -490,7 +529,7 @@ export function Sidebar({ nav, activePage, sse, t }: {
               )}
             </div>
             <SidebarItem
-              label="InkOS Play"
+              label="Play 记录"
               icon={<Gamepad2 size={16} />}
               active={activePage === "play"}
               onClick={nav.toPlay}

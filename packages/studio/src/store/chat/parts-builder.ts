@@ -23,6 +23,8 @@ const TOOL_LABELS: Record<string, string> = {
   read: "读取文件", edit: "编辑文件", grep: "搜索", ls: "列目录",
   short_fiction_run: "短篇生产",
   generate_cover: "生成封面",
+  play_start: "启动互动世界",
+  play_step: "推进互动世界",
 };
 
 function resolveToolLabel(tool: string, agent?: string): string {

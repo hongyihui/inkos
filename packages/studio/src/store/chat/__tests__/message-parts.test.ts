@@ -151,6 +151,19 @@ describe("buildPartsFromEvents", () => {
     }
   });
 
+  it("labels play tools as first-class pipeline actions", () => {
+    const parts = buildPartsFromEvents([
+      { type: "tool:start", id: "p1", tool: "play_start" },
+      { type: "tool:end", id: "p1", result: "started" },
+      { type: "tool:start", id: "p2", tool: "play_step" },
+      { type: "tool:end", id: "p2", result: "advanced" },
+    ]);
+
+    expect(parts).toHaveLength(2);
+    expect(parts[0].type === "tool" ? parts[0].execution.label : "").toBe("启动互动世界");
+    expect(parts[1].type === "tool" ? parts[1].execution.label : "").toBe("推进互动世界");
+  });
+
   it("localizes known tool errors", () => {
     const parts = buildPartsFromEvents([
       { type: "tool:start", id: "t1", tool: "sub_agent", agent: "writer" },
