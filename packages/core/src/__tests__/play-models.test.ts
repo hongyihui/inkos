@@ -116,6 +116,20 @@ describe("play models", () => {
     expect(empty.targetEntityLabel).toBeUndefined();
   });
 
+  it("coerces non-string action fields, falls back on bad enums, and drops object-shaped items", () => {
+    const intent = PlayActionIntentSchema.parse({
+      actionKind: "investigate", // not in the enum -> falls back to "do" instead of throwing
+      intent: "查看尸体",
+      risk: 3,                    // number -> "3"
+      ambiguity: 0,               // number -> "0"
+      secondaryActions: ["看尸体", { actionKind: "look" }, 5], // object/number dropped, string kept
+    });
+    expect(intent.actionKind).toBe("do");
+    expect(intent.risk).toBe("3");
+    expect(intent.ambiguity).toBe("0");
+    expect(intent.secondaryActions).toEqual(["看尸体"]);
+  });
+
   it("accepts a mutation envelope for world changes", () => {
     const mutation = PlayMutationSchema.parse({
       eventId: "event-0002",

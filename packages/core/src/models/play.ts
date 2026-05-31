@@ -1,20 +1,43 @@
 import { z } from "zod";
 
+// --- Lenient parsing helpers for free-form LLM JSON ---
+// The play pipeline parses raw model output. Treat structural drift as recoverable, not fatal:
+// coerce scalars to strings, drop malformed array items, and fall back on bad enums — so a single
+// off-shape field never crashes the whole turn. A chat agent should degrade, not hard-error on the
+// model's imperfect output.
+const coercedString = z.preprocess((v) => {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return "";
+}, z.string());
+
+function lenientArray<T extends z.ZodTypeAny>(item: T) {
+  return z.preprocess(
+    (v) => (Array.isArray(v) ? v : []),
+    z.array(z.unknown()).transform((arr) =>
+      arr.flatMap((entry) => {
+        const parsed = item.safeParse(entry);
+        return parsed.success ? [parsed.data as z.infer<T>] : [];
+      }),
+    ),
+  );
+}
+
 export const PlayActionKindSchema = z.enum(["look", "say", "move", "do", "wait"]);
 export type PlayActionKind = z.infer<typeof PlayActionKindSchema>;
 
 export const PlayActionIntentSchema = z.object({
-  actionKind: PlayActionKindSchema,
-  // Interpreters often emit null (not just an absent field) when an action has no
-  // entity/location target. Accept null/empty and normalize to undefined so a valid
-  // no-target action (look/say/wait) does not crash play_step on a Zod type error.
+  // Interpreters drift: bad/extra action kinds, null targets, numbers or objects in free-text
+  // fields, object-shaped secondary actions. Coerce and tolerate so no off-shape field crashes the turn.
+  actionKind: PlayActionKindSchema.catch("do"),
   targetEntityLabel: z.string().nullish().transform((v) => (v && v.trim() ? v : undefined)),
   targetLocationLabel: z.string().nullish().transform((v) => (v && v.trim() ? v : undefined)),
-  intent: z.string().default(""),
-  manner: z.string().default(""),
-  risk: z.string().default(""),
-  ambiguity: z.string().default(""),
-  secondaryActions: z.array(z.string().min(1)).default([]),
+  intent: coercedString,
+  manner: coercedString,
+  risk: coercedString,
+  ambiguity: coercedString,
+  secondaryActions: lenientArray(z.string()),
 });
 export type PlayActionIntentInput = z.input<typeof PlayActionIntentSchema>;
 export type PlayActionIntent = z.infer<typeof PlayActionIntentSchema>;
@@ -134,16 +157,6 @@ function normalizePlayMutation(value: unknown): unknown {
   return v;
 }
 
-// Keep only the items the model produced validly; drop (don't reject the turn on) malformed ones.
-function lenientArray<T extends z.ZodTypeAny>(item: T) {
-  return z.array(z.unknown()).default([]).transform((arr) =>
-    arr.flatMap((entry) => {
-      const parsed = item.safeParse(entry);
-      return parsed.success ? [parsed.data as z.infer<T>] : [];
-    }),
-  );
-}
-
 const PlayEdgeExpireSchema = z.object({
   edgeId: z.string().min(1),
   validUntilEventId: z.string().min(1),
@@ -153,8 +166,8 @@ const PlayEdgeExpireSchema = z.object({
 export const PlayMutationSchema = z.preprocess(normalizePlayMutation, z.object({
   eventId: z.string().min(1),
   turn: z.number().int().min(0),
-  actionKind: PlayActionKindSchema,
-  summary: z.string().nullish().transform((v) => v ?? ""),
+  actionKind: PlayActionKindSchema.catch("do"),
+  summary: coercedString,
   entities: z.object({ upsert: lenientArray(PlayEntitySchema) }).default({ upsert: [] }),
   edges: z.object({
     upsert: lenientArray(PlayEdgeSchema),
@@ -163,7 +176,7 @@ export const PlayMutationSchema = z.preprocess(normalizePlayMutation, z.object({
   stateSlots: z.object({ upsert: lenientArray(PlayStateSlotSchema) }).default({ upsert: [] }),
   evidence: z.object({ transitions: lenientArray(PlayEvidenceTransitionSchema) }).default({ transitions: [] }),
   blocked: z.boolean().default(false),
-  blockedReason: z.string().nullish().transform((v) => v ?? ""),
+  blockedReason: coercedString,
   notes: z.array(z.string()).default([]),
 }));
 export type PlayMutationInput = z.input<typeof PlayMutationSchema>;
