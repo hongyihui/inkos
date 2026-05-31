@@ -183,4 +183,24 @@ describe("play models", () => {
     expect(mutation.summary).toBe("");
     expect(mutation.blockedReason).toBe("");
   });
+
+  it("drops malformed entities/edges instead of failing the whole mutation", () => {
+    const mutation = PlayMutationSchema.parse({
+      eventId: "evt-4",
+      turn: 4,
+      actionKind: "look",
+      entities: [
+        { id: "ent_good", type: "evidence", label: "好线索", status: "seen", updatedEventId: "evt-4" },
+        { type: "evidence" }, // missing id/label — must be dropped, not crash the turn
+      ],
+      edges: [
+        { id: "edge_good", fromId: "a", type: "supports", toId: "b", validFromEventId: "evt-4", sourceEventId: "evt-4", visibility: { player: "seen", system: "known" }, strength: 0.6, confidence: 0.8 },
+        { type: "supports" }, // missing id/fromId/toId — must be dropped
+      ],
+    });
+    expect(mutation.entities.upsert).toHaveLength(1);
+    expect(mutation.entities.upsert[0]?.id).toBe("ent_good");
+    expect(mutation.edges.upsert).toHaveLength(1);
+    expect(mutation.edges.upsert[0]?.id).toBe("edge_good");
+  });
 });

@@ -120,8 +120,10 @@ export type PlayEventInput = z.input<typeof PlayEventSchema>;
 export type PlayEvent = z.infer<typeof PlayEventSchema>;
 
 // Models (especially via OpenAI-compatible gateways) drift the mutation shape: they sometimes
-// return a bare array instead of { upsert: [...] } / { transitions: [...] }, and emit null for
-// optional string fields. Normalize the common drift so a valid action doesn't crash play_step.
+// return a bare array instead of { upsert: [...] } / { transitions: [...] }, emit null for optional
+// string fields, and produce individual entities/edges/slots that are incomplete. Normalize the
+// container shape, accept null reasons, and parse each item leniently — dropping malformed items
+// rather than failing the whole mutation — so one bad item from the model doesn't crash a play turn.
 function normalizePlayMutation(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const v = { ...(value as Record<string, unknown>) };
@@ -132,28 +134,34 @@ function normalizePlayMutation(value: unknown): unknown {
   return v;
 }
 
+// Keep only the items the model produced validly; drop (don't reject the turn on) malformed ones.
+function lenientArray<T extends z.ZodTypeAny>(item: T) {
+  return z.array(z.unknown()).default([]).transform((arr) =>
+    arr.flatMap((entry) => {
+      const parsed = item.safeParse(entry);
+      return parsed.success ? [parsed.data as z.infer<T>] : [];
+    }),
+  );
+}
+
+const PlayEdgeExpireSchema = z.object({
+  edgeId: z.string().min(1),
+  validUntilEventId: z.string().min(1),
+  reason: z.string().default(""),
+});
+
 export const PlayMutationSchema = z.preprocess(normalizePlayMutation, z.object({
   eventId: z.string().min(1),
   turn: z.number().int().min(0),
   actionKind: PlayActionKindSchema,
   summary: z.string().nullish().transform((v) => v ?? ""),
-  entities: z.object({
-    upsert: z.array(PlayEntitySchema).default([]),
-  }).default({ upsert: [] }),
+  entities: z.object({ upsert: lenientArray(PlayEntitySchema) }).default({ upsert: [] }),
   edges: z.object({
-    upsert: z.array(PlayEdgeSchema).default([]),
-    expire: z.array(z.object({
-      edgeId: z.string().min(1),
-      validUntilEventId: z.string().min(1),
-      reason: z.string().default(""),
-    })).default([]),
+    upsert: lenientArray(PlayEdgeSchema),
+    expire: lenientArray(PlayEdgeExpireSchema),
   }).default({ upsert: [], expire: [] }),
-  stateSlots: z.object({
-    upsert: z.array(PlayStateSlotSchema).default([]),
-  }).default({ upsert: [] }),
-  evidence: z.object({
-    transitions: z.array(PlayEvidenceTransitionSchema).default([]),
-  }).default({ transitions: [] }),
+  stateSlots: z.object({ upsert: lenientArray(PlayStateSlotSchema) }).default({ upsert: [] }),
+  evidence: z.object({ transitions: lenientArray(PlayEvidenceTransitionSchema) }).default({ transitions: [] }),
   blocked: z.boolean().default(false),
   blockedReason: z.string().nullish().transform((v) => v ?? ""),
   notes: z.array(z.string()).default([]),
