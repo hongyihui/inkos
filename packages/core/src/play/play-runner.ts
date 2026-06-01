@@ -43,6 +43,7 @@ export interface PlaySceneRendererLike {
     readonly stateBrief: string;
     readonly mode?: "open" | "guided";
     readonly language?: "zh" | "en";
+    readonly worldPremise?: string;
   }) => Promise<PlaySceneRender>;
 }
 
@@ -136,6 +137,7 @@ export class PlayRunner {
       stateBrief,
       mode: world?.mode ?? "open",
       language,
+      worldPremise: world?.premise,
     });
     await this.store.writeProjection(this.options.worldId, this.options.runId, "projections/scene.md", `${render.sceneText}\n`);
     await this.store.appendTranscriptTurn(this.options.worldId, this.options.runId, {

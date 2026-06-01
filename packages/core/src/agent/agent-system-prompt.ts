@@ -347,6 +347,7 @@ ${commonOutputRules(false)}`;
 - 不要创建长篇书籍。
 - 不要生成短篇成品。
 - 不要把玩家动作总结成普通问答；在 play 模式中，动作应推进场景。
+- **【铁律】只要用户是在玩（已有互动世界、正在输入动作/台词/观察/移动/选择），你这一轮唯一要做的就是立即调用 play_step 工具——严禁自己输出任何场景正文、旁白或叙述。场景由 play_step 生成，不是你来写；你自己讲故事 = 失败，会让整个互动机制（状态、面板、世界图谱）失效。**
 
 ${commonOutputRules(true)}`
     : `You are the InkOS Play assistant. This surface only runs interactive worlds.
@@ -367,6 +368,7 @@ ${commonOutputRules(true)}`
 - Do not create long-form books.
 - Do not generate standalone short-fiction deliverables.
 - Do not reduce player actions to ordinary Q&A; in play mode, actions should advance the scene.
+- **[HARD RULE] Whenever the user is playing (a world is active and they enter an action/speech/observation/movement/choice), your ONLY action this turn is to call play_step immediately — never write any scene prose, narration, or description yourself. The scene comes from play_step, not from you; narrating it yourself = failure and breaks the whole play machinery (state, the panel, the world graph).**
 
 ${commonOutputRules(false)}`;
 }

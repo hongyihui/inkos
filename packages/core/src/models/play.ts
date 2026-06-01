@@ -169,6 +169,26 @@ function backfillUpsertIds(container: unknown, prefix: string, labelKey: string)
   return c;
 }
 
+// Edges additionally require temporal bookkeeping (validFromEventId / sourceEventId)
+// that the model writes the relationship (from/type/to) but routinely omits — so
+// every proposed relationship got dropped and never reached the panel. Backfill the
+// id and the two event refs from this turn's event so the relationship survives.
+function backfillEdges(container: unknown, eventId: string): unknown {
+  if (!container || typeof container !== "object" || Array.isArray(container)) return container;
+  const c = container as Record<string, unknown>;
+  if (!Array.isArray(c.upsert)) return c;
+  const hasText = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
+  c.upsert = c.upsert.map((item, i) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    const o = { ...(item as Record<string, unknown>) };
+    if (!hasText(o.id)) o.id = slugifyId("edge", o.type, i);
+    if (!hasText(o.validFromEventId)) o.validFromEventId = eventId;
+    if (!hasText(o.sourceEventId)) o.sourceEventId = eventId;
+    return o;
+  });
+  return c;
+}
+
 function normalizePlayMutation(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const v = { ...(value as Record<string, unknown>) };
@@ -177,9 +197,10 @@ function normalizePlayMutation(value: unknown): unknown {
   if (Array.isArray(v.stateSlots)) v.stateSlots = { upsert: v.stateSlots };
   if (Array.isArray(v.evidence)) v.evidence = { transitions: v.evidence };
   if (typeof v.notes === "string") v.notes = v.notes.trim() ? [v.notes] : [];
+  const eventId = typeof v.eventId === "string" && v.eventId.trim() ? v.eventId : "evt-0";
   v.entities = backfillUpsertIds(v.entities, "ent", "label");
   v.stateSlots = backfillUpsertIds(v.stateSlots, "slot", "label");
-  v.edges = backfillUpsertIds(v.edges, "edge", "type");
+  v.edges = backfillEdges(v.edges, eventId);
   return v;
 }
 

@@ -29,6 +29,10 @@ export interface PlaySceneRenderInput {
   readonly mutationSummary: string;
   readonly stateBrief: string;
   readonly language?: "zh" | "en";
+  // The world's premise — a persistent anchor so the scene stays in the
+  // established era/setting/genre and doesn't drift (a modern shop must not grow
+  // night-watchmen and oil lamps).
+  readonly worldPremise?: string;
 }
 
 const PlaySceneRenderSchema = z.object({
@@ -260,6 +264,7 @@ export function buildSceneRendererSystemPrompt(mode: "open" | "guided" = "open",
       "You are an interactive-fiction scene-response author.",
       "Write the response only from the already-applied state; do not overturn the reducer's results.",
       "It should read like a playable novel — action, senses, pressure, breathing room — never a system log and never a menu-narration that herds the player into picking something.",
+      "Stay strictly inside the world the premise established — era, place, tech level, genre tone must stay consistent. Never introduce elements that don't belong: a modern-city story must not grow night-watchmen / oil lamps; a historical/wuxia story must not sprout phones / cars / computers. Every detail lands inside the given world.",
       // Presence is a valid turn.
       "The player is not always 'acting'. When they merely observe, linger, feel, idle-chat, or do nothing, give an immersive beat — one living detail, a smell, a bystander's small movement, a thought crossing their mind. NEVER say 'there's nothing more to see' / 'you already looked' / 'stop stalling', and never nag them to hurry up and act. Let the beat breathe.",
       // The world runs on its own clock.
@@ -278,6 +283,7 @@ export function buildSceneRendererSystemPrompt(mode: "open" | "guided" = "open",
     "你是互动小说场景回应作者。",
     "你只能根据已经应用后的状态写回应，不要推翻 reducer 结果。",
     "回应要像可玩的小说：有动作、感官、压迫、留白；绝不是系统日志，也绝不是把玩家往'快做个选择'上赶的菜单旁白。",
+    "严格守住前提确立的那个世界——年代、地点、技术水平、题材基调都要一致。绝不要引入不属于它的元素：现代都市故事别冒出更夫/油灯/二更天，古代武侠故事别冒出手机/汽车/电脑。每一拍的细节都落在前提给定的那个世界里。",
     // 在场即合法
     "玩家不一定每回合都在'行动'。当他只是观察、停留、感受、闲聊、发呆，给一段有沉浸感的回应——一个活的细节、一缕气味、旁人的一个小动作、心里掠过的一个念头。绝不要说'这里没什么可看的了''你已经看过了''别磨蹭'，也绝不要催他快点行动。让这一拍能呼吸。",
     // 世界自走
@@ -294,8 +300,10 @@ export function buildSceneRendererSystemPrompt(mode: "open" | "guided" = "open",
 }
 
 function buildSceneRendererUserPrompt(input: PlaySceneRenderInput, language: "zh" | "en"): string {
+  const premise = input.worldPremise?.trim();
   if (language === "en") {
     return [
+      ...(premise ? ["World setting (always obey):", premise, ""] : []),
       "Player's words:",
       input.input,
       "",
@@ -310,6 +318,7 @@ function buildSceneRendererUserPrompt(input: PlaySceneRenderInput, language: "zh
     ].join("\n");
   }
   return [
+    ...(premise ? ["世界设定（始终遵守）：", premise, ""] : []),
     "玩家原话：",
     input.input,
     "",
