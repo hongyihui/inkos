@@ -599,31 +599,53 @@ async function maybeOutlineSectionSources(
 
     if (!content || content === "(文件尚未创建)") {
       const legacyFallback = outlineFallback(fileName);
-      const legacyEntry = legacyFallback
-        ? await maybeContextSource(storyDir, legacyFallback, reason)
-        : null;
-      return legacyEntry ? [legacyEntry] : [];
+      if (!legacyFallback) return [];
+      const legacyContent = await readFileOrDefault(join(storyDir, legacyFallback));
+      if (!legacyContent || legacyContent === "(文件尚未创建)") return [];
+      return selectOutlineSectionEntries({
+        fileName: legacyFallback,
+        content: legacyContent,
+        reason,
+        plan,
+        kind,
+      });
     }
 
-    const sections = splitMarkdownSections(content);
+    return selectOutlineSectionEntries({
+      fileName,
+      content,
+      reason,
+      plan,
+      kind,
+    });
+}
+
+function selectOutlineSectionEntries(params: {
+  readonly fileName: string;
+  readonly content: string;
+  readonly reason: string;
+  readonly plan: PlanChapterOutput;
+  readonly kind: "story-frame" | "volume-map";
+}): ContextPackage["selectedContext"] {
+    const sections = splitMarkdownSections(params.content);
     if (sections.length === 0) {
       return [{
-        source: `story/${fileName}#document`,
-        reason,
-        excerpt: content.trim(),
+        source: `story/${params.fileName}#document`,
+        reason: params.reason,
+        excerpt: params.content.trim(),
       }];
     }
 
-    const hints = deriveOutlineSelectionHints(plan);
+    const hints = deriveOutlineSelectionHints(params.plan);
     const selected = sections.filter((section) =>
-      kind === "story-frame"
+      params.kind === "story-frame"
         ? isRelevantStoryFrameSection(section, hints)
-        : isRelevantVolumeMapSection(section, hints, plan.intent.chapter),
+        : isRelevantVolumeMapSection(section, hints, params.plan.intent.chapter),
     );
-    const finalSections = selected.length > 0 ? selected : fallbackOutlineSections(sections, kind, plan.intent.chapter);
+    const finalSections = selected.length > 0 ? selected : fallbackOutlineSections(sections, params.kind, params.plan.intent.chapter);
     return dedupeBySource(finalSections.map((section) => ({
-      source: `story/${fileName}#${slugifyAnchor(section.heading)}`,
-      reason,
+      source: `story/${params.fileName}#${slugifyAnchor(section.heading)}`,
+      reason: params.reason,
       excerpt: section.raw.trim(),
     })));
 }

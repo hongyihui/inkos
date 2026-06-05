@@ -106,14 +106,14 @@ describe("ComposerAgent", () => {
     });
 
     const selectedSources = result.contextPackage.selectedContext.map((entry) => entry.source);
-    expect(selectedSources.slice(0, 6)).toEqual([
+    expect(selectedSources.slice(0, 4)).toEqual([
       "runtime/chapter_memo",
       "story/current_focus.md",
       "story/author_intent.md",
       "story/current_state.md",
-      "story/story_bible.md",
-      "story/volume_outline.md",
     ]);
+    expect(selectedSources[4]).toMatch(/^story\/story_bible\.md#/);
+    expect(selectedSources[5]).toMatch(/^story\/volume_outline\.md#/);
     // The user's long-term direction must reach the writer's context, not be dropped.
     expect(selectedSources).toContain("story/author_intent.md");
     expect(selectedSources.some((source) => source.startsWith("story/pending_hooks.md"))).toBe(true);
@@ -313,6 +313,128 @@ describe("ComposerAgent", () => {
     expect(authorIntent?.excerpt).toContain("Keep the pressure on the mentor conflict.");
     expect(compiled?.excerpt).toContain("压缩后的旧章标题历史");
     expect(result.trace.notes).toContain("compiled-compressible-context");
+  });
+
+  it("fails loudly when protected context alone exceeds the input budget", async () => {
+    await writeFile(
+      join(storyDir, "author_intent.md"),
+      `# Author Intent\n\n${"protected author intent ".repeat(5000)}`,
+      "utf-8",
+    );
+
+    await expect(composeGovernedChapter({
+      book,
+      bookDir,
+      chapterNumber: 4,
+      plan,
+      contextBudget: {
+        contextWindowTokens: 300,
+        reservedOutputTokens: 0,
+      },
+      compressibleContextCompiler: async () => "should not be called",
+    })).rejects.toThrow(/Protected context exceeds available input budget/);
+  });
+
+  it("fails loudly when context needs compilation but no compiler was provided", async () => {
+    await writeFile(
+      join(storyDir, "chapter_summaries.md"),
+      [
+        "# Chapter Summaries",
+        "",
+        "| chapter | title | characters | events | stateChanges | hookActivity | mood | chapterType |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        `| 1 | ${"旧案".repeat(1200)} | Lin Yue | Old archive noise | None | none | tight | investigation |`,
+      ].join("\n"),
+      "utf-8",
+    );
+
+    await expect(composeGovernedChapter({
+      book,
+      bookDir,
+      chapterNumber: 4,
+      plan,
+      contextBudget: {
+        contextWindowTokens: 900,
+        reservedOutputTokens: 0,
+      },
+    })).rejects.toThrow(/no compressible context compiler/);
+  });
+
+  it("fails loudly when the compressible context compiler returns empty output", async () => {
+    await writeFile(
+      join(storyDir, "chapter_summaries.md"),
+      [
+        "# Chapter Summaries",
+        "",
+        "| chapter | title | characters | events | stateChanges | hookActivity | mood | chapterType |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        `| 1 | ${"旧案".repeat(1200)} | Lin Yue | Old archive noise | None | none | tight | investigation |`,
+      ].join("\n"),
+      "utf-8",
+    );
+
+    await expect(composeGovernedChapter({
+      book,
+      bookDir,
+      chapterNumber: 4,
+      plan,
+      contextBudget: {
+        contextWindowTokens: 900,
+        reservedOutputTokens: 0,
+      },
+      compressibleContextCompiler: async () => "   ",
+    })).rejects.toThrow(/compiler returned empty output/);
+  });
+
+  it("selects relevant legacy outline sections instead of protecting whole legacy files", async () => {
+    const unrelatedNoise = "IRRELEVANT-LEGACY-NOISE ".repeat(2500);
+    await Promise.all([
+      writeFile(
+        join(storyDir, "story_bible.md"),
+        [
+          "# Story Bible",
+          "",
+          "## Unrelated Archive",
+          unrelatedNoise,
+          "",
+          "## World Rules",
+          "The jade seal cannot be destroyed. Lin Yue still hides the broken oath token.",
+        ].join("\n"),
+        "utf-8",
+      ),
+      writeFile(
+        join(storyDir, "volume_outline.md"),
+        [
+          "# Volume Outline",
+          "",
+          "## Chapter 1",
+          unrelatedNoise,
+          "",
+          "## Chapter 4",
+          "Track the merchant guild trail while keeping the mentor conflict active.",
+        ].join("\n"),
+        "utf-8",
+      ),
+    ]);
+
+    const result = await composeGovernedChapter({
+      book,
+      bookDir,
+      chapterNumber: 4,
+      plan,
+    });
+
+    const storyBibleEntry = result.contextPackage.selectedContext.find((entry) =>
+      entry.source.startsWith("story/story_bible.md#"),
+    );
+    const volumeEntry = result.contextPackage.selectedContext.find((entry) =>
+      entry.source.startsWith("story/volume_outline.md#"),
+    );
+
+    expect(storyBibleEntry?.excerpt).toContain("jade seal cannot be destroyed");
+    expect(storyBibleEntry?.excerpt).not.toContain("IRRELEVANT-LEGACY-NOISE");
+    expect(volumeEntry?.excerpt).toContain("Chapter 4");
+    expect(volumeEntry?.excerpt).not.toContain("IRRELEVANT-LEGACY-NOISE");
   });
 
   it("selects relevant outline sections instead of protecting whole large outline files", async () => {
