@@ -164,6 +164,28 @@ describe("buildPartsFromEvents", () => {
     expect(parts[1].type === "tool" ? parts[1].execution.label : "").toBe("推进互动世界");
   });
 
+  it("does not render model narration after a completed play tool as authoritative text", () => {
+    const parts = buildPartsFromEvents([
+      { type: "tool:start", id: "p1", tool: "play_step" },
+      {
+        type: "tool:end",
+        id: "p1",
+        result: "advanced",
+        details: {
+          kind: "play_turn_advanced",
+          sceneText: "工具生成的权威场景。",
+          suggestedActions: ["检查票根"],
+        },
+      },
+      { type: "draft:delta", text: "模型又复述了一遍场景。" },
+    ]);
+
+    expect(parts).toHaveLength(2);
+    expect(parts[0].type).toBe("tool");
+    expect(parts[1].type).toBe("thinking");
+    expect(parts.some((part) => part.type === "text")).toBe(false);
+  });
+
   it("labels proposed action confirmations", () => {
     const parts = buildPartsFromEvents([
       { type: "tool:start", id: "a1", tool: "propose_action" },

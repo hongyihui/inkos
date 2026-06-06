@@ -56,6 +56,7 @@ function summarizeToolResult(result: unknown): string {
 
 export function buildPartsFromEvents(events: StreamEvent[]): MessagePart[] {
   const parts: MessagePart[] = [];
+  let suppressTextAfterPlayTool = false;
 
   /** Find the last tool part that is still "running". */
   function findRunningTool(): ToolExecution | undefined {
@@ -64,6 +65,15 @@ export function buildPartsFromEvents(events: StreamEvent[]): MessagePart[] {
       if (p.type === "tool" && p.execution.status === "running") return p.execution;
     }
     return undefined;
+  }
+
+  function appendThinking(content: string): void {
+    const last = parts[parts.length - 1];
+    if (last?.type === "thinking") {
+      last.content += content;
+    } else {
+      parts.push({ type: "thinking", content, streaming: false });
+    }
   }
 
   for (const event of events) {
@@ -91,6 +101,10 @@ export function buildPartsFromEvents(events: StreamEvent[]): MessagePart[] {
       }
 
       case "draft:delta": {
+        if (suppressTextAfterPlayTool) {
+          if (event.text.trim()) appendThinking(event.text);
+          break;
+        }
         // Append to last text part, or create a new one
         const last = parts[parts.length - 1];
         if (last?.type === "text") {
@@ -146,6 +160,9 @@ export function buildPartsFromEvents(events: StreamEvent[]): MessagePart[] {
             if (event.isError) exec.error = localizeKnownRuntimeMessage(summarizeToolResult(event.result));
             else exec.result = summarizeToolResult(event.result);
             if (event.details !== undefined) exec.details = event.details;
+            if (!event.isError && (exec.tool === "play_start" || exec.tool === "play_step")) {
+              suppressTextAfterPlayTool = true;
+            }
             // Mark all remaining stages as completed
             exec.stages = exec.stages?.map((s) =>
               s.status !== "completed" ? { ...s, status: "completed" as const, progress: undefined } : s

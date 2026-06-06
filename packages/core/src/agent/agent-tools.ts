@@ -71,6 +71,33 @@ function safePlayId(value: string | undefined, fallback: string): string {
   return raw;
 }
 
+const SuggestedActionParam = Type.Union([
+  Type.String({ description: "A short clickable player action." }),
+  Type.Object({
+    label: Type.Optional(Type.String({ description: "Short clickable player action." })),
+    action: Type.Optional(Type.String({ description: "Concrete action text." })),
+    text: Type.Optional(Type.String({ description: "Concrete action text." })),
+    title: Type.Optional(Type.String({ description: "Short action title." })),
+    description: Type.Optional(Type.String({ description: "Optional action description." })),
+  }, { description: "A model may describe an action as an object; InkOS will normalize it to one short action string." }),
+], { description: "Suggested action as a string or small action object." });
+
+type SuggestedActionParamType = Static<typeof SuggestedActionParam>;
+
+function normalizeSuggestedActions(value: readonly SuggestedActionParamType[] | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const raw of value) {
+    const text = typeof raw === "string"
+      ? raw
+      : raw.action ?? raw.label ?? raw.text ?? raw.title ?? raw.description ?? "";
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (normalized) out.push(normalized);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // 1. Proposed Action Tool (propose_action)
 // ---------------------------------------------------------------------------
@@ -149,7 +176,7 @@ const ProposeActionParams = Type.Object({
       Type.Literal("guided"),
     ], { description: "Confirmed play mode: open for free actions, guided for suggested choices." })),
     initialScene: Type.Optional(Type.String({ description: "Confirmed opening playable scene." })),
-    suggestedActions: Type.Optional(Type.Array(Type.String({ description: "2-4 confirmed immediate actions." }))),
+    suggestedActions: Type.Optional(Type.Array(SuggestedActionParam)),
   }, { description: "Structured execution args for action=play_start." })),
   generateCover: Type.Optional(Type.Object({
     title: Type.Optional(Type.String({ description: "Confirmed cover title." })),
@@ -235,6 +262,21 @@ function compactObject<T extends Record<string, unknown>>(value: T | undefined):
   return Object.keys(out).length > 0 ? out as T : undefined;
 }
 
+function compactPlayStartPayload(value: ProposeActionParamsType["playStart"]): NonNullable<ActionPayload["playStart"]> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const out: NonNullable<ActionPayload["playStart"]> = {};
+  const title = value.title?.trim();
+  if (title) out.title = title;
+  const premise = value.premise?.trim();
+  if (premise) out.premise = premise;
+  if (value.mode) out.mode = value.mode;
+  const initialScene = value.initialScene?.trim();
+  if (initialScene) out.initialScene = initialScene;
+  const suggestedActions = normalizeSuggestedActions(value.suggestedActions);
+  if (suggestedActions.length > 0) out.suggestedActions = suggestedActions;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function proposedActionPayload(params: ProposeActionParamsType): ActionPayload | undefined {
   const payload: ActionPayload = {};
   if (params.action === "create_book") {
@@ -246,7 +288,7 @@ function proposedActionPayload(params: ProposeActionParamsType): ActionPayload |
     if (shortRun) payload.shortRun = shortRun;
   }
   if (params.action === "play_start") {
-    const playStart = compactObject(params.playStart);
+    const playStart = compactPlayStartPayload(params.playStart);
     if (playStart) payload.playStart = playStart;
   }
   if (params.action === "generate_cover") {
@@ -764,9 +806,7 @@ const PlayStartParams = Type.Object({
   initialScene: Type.Optional(Type.String({
     description: "Opening scene shown to the player. Write this as the first playable moment, not as a config summary.",
   })),
-  suggestedActions: Type.Optional(Type.Array(Type.String({
-    description: "2-4 immediate actions the player can click or copy.",
-  }))),
+  suggestedActions: Type.Optional(Type.Array(SuggestedActionParam)),
 });
 
 type PlayStartParamsType = Static<typeof PlayStartParams>;
@@ -831,10 +871,7 @@ export function createPlayStartTool(
         });
       }
 
-      const suggestedActions = (playPayload?.suggestedActions ?? params.suggestedActions ?? [])
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 4);
+      const suggestedActions = normalizeSuggestedActions(playPayload?.suggestedActions ?? params.suggestedActions);
 
       return textResult(
         [

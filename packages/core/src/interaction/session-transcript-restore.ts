@@ -546,6 +546,7 @@ function messageEventToInteractionMessage(
   event: MessageEvent,
   restoredToolExecutions?: ToolExecution[],
   restoredThinking?: ReadonlyArray<string>,
+  options: { suppressAssistantText?: boolean } = {},
 ): InteractionMessage | null {
   const raw = event.message as Record<string, unknown>;
   if (!isObject(raw)) return null;
@@ -557,16 +558,19 @@ function messageEventToInteractionMessage(
   }
 
   if (event.role === "assistant") {
-    const content = textFromContent(raw.content);
+    const rawText = textFromContent(raw.content);
+    const content = options.suppressAssistantText ? "" : rawText;
     const thinking = joinThinking([
       ...(restoredThinking ?? []),
       thinkingFromContent(raw.content),
       event.legacyDisplay?.thinking,
+      options.suppressAssistantText ? rawText : undefined,
     ]);
     const toolExecutions = restoredToolExecutions?.length
       ? restoredToolExecutions
       : event.legacyDisplay?.toolExecutions as ToolExecution[] | undefined;
-    if (!content) return null;
+    if (!content && !thinking && toolExecutions?.length) return null;
+    if (!content && !toolExecutions?.length) return null;
     return {
       role: "assistant",
       content,
@@ -653,6 +657,12 @@ function messageEventsToInteractionMessages(events: MessageEvent[]): Interaction
     return toolLabels[tool] ?? tool;
   };
 
+  const hasCompletedPlayTool = (executions: ReadonlyArray<ToolExecution>): boolean =>
+    executions.some((execution) =>
+      execution.status === "completed"
+      && (execution.tool === "play_start" || execution.tool === "play_step")
+    );
+
   const rememberToolCalls = (event: MessageEvent, raw: Record<string, unknown>) => {
     for (const block of contentBlocks(raw)) {
       if (!isObject(block) || block.type !== "toolCall") continue;
@@ -723,6 +733,7 @@ function messageEventsToInteractionMessages(events: MessageEvent[]): Interaction
         event,
         pendingToolExecutions.length > 0 ? pendingToolExecutions : undefined,
         pendingThinking.length > 0 ? pendingThinking : undefined,
+        { suppressAssistantText: hasCompletedPlayTool(pendingToolExecutions) },
       );
       if (message) {
         messages.push(message);

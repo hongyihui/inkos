@@ -43,7 +43,9 @@ export type ToolExecution = z.infer<typeof ToolExecutionSchema>;
 
 export const InteractionMessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
-  content: z.string().min(1),
+  // Assistant turns may be tool-only. In that case the user-facing content is
+  // rendered from toolExecutions, not from free text.
+  content: z.string(),
   thinking: z.string().optional(),
   toolExecutions: z.array(ToolExecutionSchema).optional(),
   timestamp: z.number().int().nonnegative(),

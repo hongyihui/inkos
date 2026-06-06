@@ -20,6 +20,7 @@ interface PlayEdge {
   readonly fromId: string;
   readonly type: string;
   readonly toId: string;
+  readonly value?: Record<string, unknown>;
   readonly validUntilEventId?: string | null;
   readonly strength?: number | null;
 }
@@ -60,7 +61,6 @@ interface CoverConfigResponse {
 }
 
 const HOLDING_TYPES = new Set(["item", "evidence", "clue", "claim", "proof_chain"]);
-const HOLDING_EDGE_TYPES = new Set(["持有", "携带", "握有", "拿着", "holds", "holding", "carries", "carrying", "has"]);
 const HOLDING_GLYPH: Record<string, string> = {
   item: "🎒", evidence: "📄", clue: "🔍", claim: "💡", proof_chain: "🔗",
 };
@@ -81,7 +81,7 @@ function formatValue(value: unknown): string {
 }
 
 function isHoldingEdge(edge: PlayEdge): boolean {
-  return HOLDING_EDGE_TYPES.has(edge.type.trim().toLowerCase());
+  return edge.value?.role === "holding";
 }
 
 function isHeldEntity(entity: PlayEntity, currentEdges: ReadonlyArray<PlayEdge>): boolean {

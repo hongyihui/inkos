@@ -1857,4 +1857,138 @@ describe("session transcript restore", () => {
       }),
     ]);
   });
+
+  it("restores play tool turns as tool-only messages instead of duplicating scene text", async () => {
+    await appendTranscriptEvent(projectRoot, {
+      type: "session_created",
+      version: 1,
+      sessionId: "s1",
+      seq: 1,
+      timestamp: 1,
+      bookId: null,
+      sessionKind: "play",
+      playMode: "open",
+      title: null,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await appendTranscriptEvent(projectRoot, {
+      type: "request_started",
+      version: 1,
+      sessionId: "s1",
+      requestId: "r1",
+      sessionKind: "play",
+      seq: 2,
+      timestamp: 2,
+      input: "检查维修盖",
+    });
+    await appendTranscriptEvent(projectRoot, {
+      type: "message",
+      version: 1,
+      sessionId: "s1",
+      requestId: "r1",
+      uuid: "u1",
+      parentUuid: null,
+      seq: 3,
+      role: "user",
+      timestamp: 3,
+      message: { role: "user", content: "检查维修盖", timestamp: 3 },
+    } as MessageEvent);
+    await appendTranscriptEvent(projectRoot, {
+      type: "message",
+      version: 1,
+      sessionId: "s1",
+      requestId: "r1",
+      uuid: "a1",
+      parentUuid: "u1",
+      seq: 4,
+      role: "assistant",
+      timestamp: 4,
+      toolCallId: "tool-1",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "调用 play_step", signature: "sig" },
+          { type: "toolCall", id: "tool-1", name: "play_step", arguments: { input: "检查维修盖" } },
+        ],
+        api: "openai-completions",
+        provider: "openai",
+        model: "deepseek-v4-flash",
+        usage,
+        stopReason: "toolUse",
+        timestamp: 4,
+      },
+    } as MessageEvent);
+    await appendTranscriptEvent(projectRoot, {
+      type: "message",
+      version: 1,
+      sessionId: "s1",
+      requestId: "r1",
+      uuid: "t1",
+      parentUuid: "a1",
+      seq: 5,
+      role: "toolResult",
+      timestamp: 5,
+      toolCallId: "tool-1",
+      sourceToolAssistantUuid: "a1",
+      message: {
+        role: "toolResult",
+        toolCallId: "tool-1",
+        toolName: "play_step",
+        content: [{ type: "text", text: "Play advanced.\n工具生成的权威场景。" }],
+        details: {
+          kind: "play_turn_advanced",
+          sceneText: "工具生成的权威场景。",
+          suggestedActions: ["继续检查"],
+        },
+        isError: false,
+        timestamp: 5,
+      },
+    } as MessageEvent);
+    await appendTranscriptEvent(projectRoot, {
+      type: "message",
+      version: 1,
+      sessionId: "s1",
+      requestId: "r1",
+      uuid: "a2",
+      parentUuid: "t1",
+      seq: 6,
+      role: "assistant",
+      timestamp: 6,
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "模型复述的重复场景。" }],
+        api: "openai-completions",
+        provider: "openai",
+        model: "deepseek-v4-flash",
+        usage,
+        stopReason: "stop",
+        timestamp: 6,
+      },
+    } as MessageEvent);
+    await appendTranscriptEvent(projectRoot, {
+      type: "request_committed",
+      version: 1,
+      sessionId: "s1",
+      requestId: "r1",
+      seq: 7,
+      timestamp: 7,
+    });
+
+    const session = await deriveBookSessionFromTranscript(projectRoot, "s1");
+    const assistant = session?.messages.find((message) => message.toolExecutions?.some((exec) => exec.tool === "play_step"));
+
+    expect(assistant).toMatchObject({
+      role: "assistant",
+      content: "",
+      thinking: expect.stringContaining("模型复述的重复场景。"),
+      toolExecutions: [
+        expect.objectContaining({
+          tool: "play_step",
+          details: expect.objectContaining({ kind: "play_turn_advanced" }),
+        }),
+      ],
+    });
+    expect(session?.messages.some((message) => message.content === "模型复述的重复场景。")).toBe(false);
+  });
 });

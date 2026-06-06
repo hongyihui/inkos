@@ -82,6 +82,25 @@ describe("agent play tools", () => {
       .resolves.toContain("雨一直下");
   });
 
+  it("normalizes object-shaped suggested actions at the tool boundary", async () => {
+    const sessionId = "1700000000000-sug001";
+    const tool = createPlayStartTool(root, sessionId);
+    const result = await tool.execute("tc-start-suggestions", {
+      title: "老邮局",
+      premise: "玩家在地下分拣室值夜班。",
+      initialScene: "传送带自己启动，吐出一个写着玩家姓名的旧包裹。",
+      suggestedActions: [
+        { label: "拆开旧包裹", description: "检查里面到底装着什么" },
+        { action: "检查待销毁信件区的铁门" },
+      ],
+    });
+
+    expect(result.details).toMatchObject({
+      kind: "play_world_started",
+      suggestedActions: ["拆开旧包裹", "检查待销毁信件区的铁门"],
+    });
+  });
+
   it("advances the play world bound to the session", async () => {
     const sessionId = "1700000000000-bbbb02";
     const store = new PlayStore(root);
