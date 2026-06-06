@@ -74,7 +74,7 @@ type PipelineLike = Pick<PipelineRunner, "writeNextChapter" | "reviseDraft"> & {
     },
   ) => Promise<void>;
 };
-type StateLike = Pick<StateManager, "ensureControlDocuments" | "bookDir" | "loadBookConfig" | "loadChapterIndex" | "saveChapterIndex" | "listBooks">;
+type StateLike = Pick<StateManager, "ensureControlDocuments" | "bookDir" | "loadBookConfig" | "loadChapterIndex" | "saveChapterIndex" | "listBooks" | "acquireBookLock">;
 type InstrumentablePipelineLike = PipelineLike & {
   readonly config?: {
     logger?: Logger;
@@ -132,6 +132,19 @@ function buildCreationExternalContext(input: {
   }
 
   return sections.join("\n\n");
+}
+
+async function withBookMutationLock<T>(
+  state: StateLike,
+  bookId: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const releaseLock = await state.acquireBookLock(bookId);
+  try {
+    return await task();
+  } finally {
+    await releaseLock();
+  }
 }
 
 export function buildChapterFileLookup(files: ReadonlyArray<string>): ReadonlyMap<number, string> {
@@ -440,7 +453,7 @@ export function createInteractionToolsFromDeps(
       bookId,
       () => pipeline.reviseDraft(bookId, chapterNumber, mode as ReviseMode),
     ),
-    patchChapterText: async (bookId, chapterNumber, targetText, replacementText) => {
+    patchChapterText: async (bookId, chapterNumber, targetText, replacementText) => withBookMutationLock(state, bookId, async () => {
       const execution = await executeEditTransaction(
         {
           bookDir: (targetBookId) => state.bookDir(targetBookId),
@@ -462,8 +475,8 @@ export function createInteractionToolsFromDeps(
           responseText: execution.summary,
         },
       };
-    },
-    renameEntity: async (bookId, oldValue, newValue) => {
+    }),
+    renameEntity: async (bookId, oldValue, newValue) => withBookMutationLock(state, bookId, async () => {
       const execution = await executeEditTransaction(
         {
           bookDir: (targetBookId) => state.bookDir(targetBookId),
@@ -483,22 +496,22 @@ export function createInteractionToolsFromDeps(
           responseText: execution.summary,
         },
       };
-    },
-    updateCurrentFocus: async (bookId, content) => {
+    }),
+    updateCurrentFocus: async (bookId, content) => withBookMutationLock(state, bookId, async () => {
       await state.ensureControlDocuments(bookId);
       await writeFile(join(state.bookDir(bookId), "story", "current_focus.md"), content, "utf-8");
-    },
-    updateAuthorIntent: async (bookId, content) => {
+    }),
+    updateAuthorIntent: async (bookId, content) => withBookMutationLock(state, bookId, async () => {
       await state.ensureControlDocuments(bookId);
       await writeFile(join(state.bookDir(bookId), "story", "author_intent.md"), content, "utf-8");
-    },
-    writeTruthFile: async (bookId, fileName, content) => {
+    }),
+    writeTruthFile: async (bookId, fileName, content) => withBookMutationLock(state, bookId, async () => {
       await state.ensureControlDocuments(bookId);
       const storyDir = join(state.bookDir(bookId), "story");
       const safeFileName = assertSafeTruthFileName(fileName);
       const targetPath = safeChildPath(storyDir, safeFileName);
       await mkdir(dirname(targetPath), { recursive: true });
       await writeFile(targetPath, content, "utf-8");
-    },
+    }),
   };
 }
