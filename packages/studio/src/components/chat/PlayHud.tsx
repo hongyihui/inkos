@@ -321,6 +321,7 @@ export function PlayHud(props: {
   readonly isStreaming: boolean;
   readonly isZh: boolean;
   readonly sessionTitle?: string | null;
+  readonly imageRefreshSignal?: number;
 }) {
   const { sessionId, isStreaming, isZh } = props;
   const base = `/play/runs/${encodeURIComponent(sessionId)}/main`;
@@ -349,6 +350,10 @@ export function PlayHud(props: {
   }, [base]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (props.imageRefreshSignal !== undefined) void load();
+  }, [props.imageRefreshSignal, load]);
 
   // Refetch when a turn finishes (streaming true -> false).
   useEffect(() => {
@@ -555,8 +560,6 @@ export function PlayHud(props: {
               settings={settings}
               coverReady={coverReady}
               onToggle={toggleSetting}
-              onIllustrateMoment={() => generate("scene", { target: "scene" })}
-              momentBusy={generating.has("scene")}
             />
           </>
         )}
@@ -570,10 +573,8 @@ function PlayImagePanel(props: {
   readonly settings: PlayImageSettings;
   readonly coverReady: boolean;
   readonly onToggle: (key: keyof PlayImageSettings) => void;
-  readonly onIllustrateMoment: () => void;
-  readonly momentBusy: boolean;
 }) {
-  const { isZh, settings, coverReady, onToggle, onIllustrateMoment, momentBusy } = props;
+  const { isZh, settings, coverReady, onToggle } = props;
   const options: ReadonlyArray<{ key: keyof PlayImageSettings; label: string }> = [
     { key: "actors", label: isZh ? "为角色配图" : "Illustrate characters" },
     { key: "moments", label: isZh ? "为时刻配图" : "Illustrate moments" },
@@ -607,15 +608,6 @@ function PlayImagePanel(props: {
         <p className="mt-2 text-[11px] leading-4 text-muted-foreground/50">
           {isZh ? "未检测到可用的生图 API。在「模型配置」里配好后即可勾选。" : "No image API configured. Set one up in Model Settings to enable."}
         </p>
-      ) : settings.moments ? (
-        <button
-          type="button"
-          onClick={onIllustrateMoment}
-          disabled={momentBusy}
-          className="mt-2 w-full rounded-lg border border-border/40 bg-secondary/40 px-2.5 py-1.5 text-[12px] font-medium text-foreground hover:text-primary disabled:opacity-50"
-        >
-          {momentBusy ? (isZh ? "配图中…" : "Illustrating…") : (isZh ? "为这一刻配图" : "Illustrate this moment")}
-        </button>
       ) : null}
     </section>
   );

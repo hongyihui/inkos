@@ -30,6 +30,7 @@ import {
   ChevronDown,
   Check,
   Gamepad2,
+  ImagePlus,
 } from "lucide-react";
 import { Shimmer } from "../components/ai-elements/shimmer";
 import {
@@ -132,6 +133,9 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
   const fetchCustomModels = useServiceStore((s) => s.fetchCustomModels);
   const [configuredModelSelection, setConfiguredModelSelection] = useState<ChatPageModelPreference | null>(null);
   const [serviceConfigLoaded, setServiceConfigLoaded] = useState(false);
+  const [playImageGenerating, setPlayImageGenerating] = useState(false);
+  const [playImageRefreshSignal, setPlayImageRefreshSignal] = useState(0);
+  const [playImageError, setPlayImageError] = useState<string | null>(null);
 
   useEffect(() => { void fetchServices(); }, [fetchServices]);
   useEffect(() => {
@@ -358,6 +362,29 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
     });
   };
 
+  useEffect(() => {
+    setPlayImageError(null);
+    setPlayImageGenerating(false);
+  }, [activeSessionId]);
+
+  const handleGeneratePlaySceneImage = async () => {
+    if (!activeSessionId || currentSessionKind !== "play" || playImageGenerating) return;
+    setPlayImageGenerating(true);
+    setPlayImageError(null);
+    try {
+      await fetchJson(`/play/runs/${encodeURIComponent(activeSessionId)}/main/generate-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: "scene" }),
+      });
+      setPlayImageRefreshSignal((value) => value + 1);
+    } catch (error) {
+      setPlayImageError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPlayImageGenerating(false);
+    }
+  };
+
   const emptyGuidance = (() => {
     if (currentSessionKind === "short") {
       return isZh
@@ -540,7 +567,8 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
       {needsPlayModeChoice ? null : (
       <div className="shrink-0 border-t border-border/40 px-4 py-3">
         <div className="max-w-3xl mx-auto">
-            <div className="rounded-xl bg-secondary/30 transition-all">
+          <div className="flex items-start gap-2">
+            <div className="flex-1 rounded-xl bg-secondary/30 transition-all">
               <div className="flex items-center gap-2 px-3 py-2">
                 <textarea
                   ref={textareaRef}
@@ -590,6 +618,24 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
                 )}
               </div>
             </div>
+            {currentSessionKind === "play" ? (
+              <button
+                type="button"
+                onClick={handleGeneratePlaySceneImage}
+                disabled={loading || !activeSessionId || playImageGenerating}
+                title={isZh ? "为当前时刻配图" : "Illustrate current moment"}
+                className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-secondary/40 text-muted-foreground shadow-sm transition-all hover:border-primary/50 hover:bg-primary/10 hover:text-primary active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+                aria-label={isZh ? "为当前时刻配图" : "Illustrate current moment"}
+              >
+                {playImageGenerating ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={17} />}
+              </button>
+            ) : null}
+          </div>
+          {playImageError ? (
+            <p className="mt-2 text-right text-[11px] leading-4 text-destructive/80">
+              {isZh ? `配图失败：${playImageError}` : `Image failed: ${playImageError}`}
+            </p>
+          ) : null}
         </div>
       </div>
       )}
@@ -600,6 +646,7 @@ export function ChatPage({ activeBookId, mode = activeBookId ? "book" : "book-cr
           isStreaming={loading}
           isZh={isZh}
           sessionTitle={activeSession?.title ?? null}
+          imageRefreshSignal={playImageRefreshSignal}
         />
       )}
     </div>
