@@ -498,3 +498,46 @@ export async function sendWebhook(
   const transport = await import("./notify/webhook.js");
   await transport.sendWebhook(config, payload);
 }
+
+// ── Interactive Film (story graph) ──
+export {
+  StoryGraphSchema,
+  StoryNodeSchema,
+  ChoiceSchema,
+  VariableSchema,
+  EndingSchema,
+  ConditionSchema,
+  EffectSchema,
+  type StoryGraph,
+  type StoryNode,
+  type Choice,
+  type Variable,
+  type Ending,
+  type Condition,
+  type Effect,
+  type VarValue,
+  type NodeType,
+} from "./interactive-film/graph-schema.js";
+export {
+  evaluateCondition,
+  applyEffects,
+  visibleChoices,
+  initVarState,
+  type VarState,
+} from "./interactive-film/evaluator.js";
+export {
+  validateStoryGraph,
+  type ValidationReport,
+  type ValidationIssue,
+} from "./interactive-film/validation.js";
+export {
+  loadStoryGraph,
+  saveStoryGraph,
+  storyGraphPath,
+} from "./interactive-film/graph-store.js";
+export {
+  generateStoryGraph,
+  buildStoryGraphFromLLMText,
+  extractJson,
+  type GenerateStoryGraphInput,
+} from "./interactive-film/generate.js";
