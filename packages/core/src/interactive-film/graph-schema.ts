@@ -77,6 +77,7 @@ export const StoryNodeSchema = z.object({
   choices: z.array(ChoiceSchema).default([]),
   imageSlot: ImageSlotSchema.optional(),
   act: z.string().default(""),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 export type StoryNode = z.infer<typeof StoryNodeSchema>;
 
