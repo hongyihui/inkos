@@ -2,6 +2,12 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Rebuild @actalk/inkos-core before starting the E2E server.  The API server
+  // (tsx watch src/api/index.ts) imports core via its compiled dist/index.js,
+  // not the TypeScript source.  A stale dist causes runtime behaviour to
+  // diverge from the sources, making otherwise-correct logic invisible to the
+  // test server.  See e2e/global-setup.ts for details.
+  globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
   use: {
     baseURL: "http://localhost:4580",
