@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveNodeDelta, addNodeDelta, addChoiceDelta, removeChoiceDelta, removeNodeDelta } from "../lib/story-editor-deltas";
+import { moveNodeDelta, addNodeDelta, addChoiceDelta, removeChoiceDelta, removeChoicesDelta, removeNodeDelta } from "../lib/story-editor-deltas";
 import { StoryNodeSchema } from "@actalk/inkos-core";
 
 const node = StoryNodeSchema.parse({ id: "s", type: "branch", title: "T", choices: [{ id: "c1", text: "A", targetNodeId: "e" }] });
@@ -23,6 +23,21 @@ describe("editor delta builders", () => {
   it("removeChoiceDelta drops the choice from the source node", () => {
     const d = removeChoiceDelta(node, "c1") as { delta: { nodes: { upsert: any[] } } };
     expect(d.delta.nodes.upsert[0].choices).toEqual([]);
+  });
+  it("removeChoicesDelta drops multiple choices in a single delta", () => {
+    const multiNode = StoryNodeSchema.parse({
+      id: "m",
+      type: "branch",
+      title: "Multi",
+      choices: [
+        { id: "c1", text: "A", targetNodeId: "e1" },
+        { id: "c2", text: "B", targetNodeId: "e2" },
+        { id: "c3", text: "C", targetNodeId: "e3" },
+      ],
+    });
+    const d = removeChoicesDelta(multiNode, ["c1", "c3"]) as { delta: { nodes: { upsert: any[] } } };
+    const remaining = d.delta.nodes.upsert[0].choices;
+    expect(remaining.map((c: any) => c.id)).toEqual(["c2"]);
   });
   it("removeNodeDelta removes by id", () => {
     const d = removeNodeDelta("x") as { delta: { nodes: { remove: string[] } } };

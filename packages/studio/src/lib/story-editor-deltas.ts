@@ -22,6 +22,10 @@ export function addChoiceDelta(
 export function removeChoiceDelta(sourceNode: StoryNode, choiceId: string): { delta: unknown } {
   return { delta: { nodes: { upsert: [{ ...sourceNode, choices: sourceNode.choices.filter((c) => c.id !== choiceId) }] } } };
 }
+export function removeChoicesDelta(sourceNode: StoryNode, choiceIds: string[]): { delta: unknown } {
+  const drop = new Set(choiceIds);
+  return { delta: { nodes: { upsert: [{ ...sourceNode, choices: sourceNode.choices.filter((c) => !drop.has(c.id)) }] } } };
+}
 export function removeNodeDelta(nodeId: string): { delta: unknown } {
   return { delta: { nodes: { remove: [nodeId] } } };
 }

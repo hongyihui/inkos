@@ -17,7 +17,7 @@ import { useColors } from "../hooks/use-colors";
 import type { Theme } from "../hooks/use-theme";
 import type { TFunction } from "../hooks/use-i18n";
 import { layoutStoryGraph } from "../lib/story-flow-layout";
-import { moveNodeDelta, addNodeDelta, genNodeId, addChoiceDelta, removeChoiceDelta, removeNodeDelta, genChoiceId } from "../lib/story-editor-deltas";
+import { moveNodeDelta, addNodeDelta, genNodeId, addChoiceDelta, removeChoicesDelta, removeNodeDelta, genChoiceId } from "../lib/story-editor-deltas";
 import type { StoryGraph } from "@actalk/inkos-core/interactive-film/graph-schema";
 
 interface Nav {
@@ -107,6 +107,7 @@ export default function FlowView({
 
   const onConnect = async (c: { source: string | null; target: string | null }) => {
     if (!editing || !graph || !c.source || !c.target) return;
+    if (c.source === c.target) return;
     const src = graph.nodes.find((g) => g.id === c.source);
     if (!src) return;
     await post(addChoiceDelta(src, { id: genChoiceId(), text: "新选项", targetNodeId: c.target }));
@@ -119,10 +120,18 @@ export default function FlowView({
 
   const onEdgesDelete = async (deleted: Array<{ id: string }>) => {
     if (!editing || !graph) return;
+    const bySource = new Map<string, string[]>();
     for (const e of deleted) {
       const [source, choiceId] = e.id.split("->"); // layout edge id format: ${node.id}->${choice.id}
+      if (source && choiceId) {
+        const list = bySource.get(source) ?? [];
+        list.push(choiceId);
+        bySource.set(source, list);
+      }
+    }
+    for (const [source, choiceIds] of bySource) {
       const src = graph.nodes.find((g) => g.id === source);
-      if (src && choiceId) await post(removeChoiceDelta(src, choiceId));
+      if (src) await post(removeChoicesDelta(src, choiceIds));
     }
   };
 
