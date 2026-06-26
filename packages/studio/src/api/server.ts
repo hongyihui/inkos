@@ -5270,8 +5270,8 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
         const file = resolveProjectImageFile(root, ref);
         const buf = await readFile(file.resolved);
         assetDataUris[ref] = `data:${file.contentType};base64,${buf.toString("base64")}`;
-      } catch {
-        /* missing or unreadable image — skip this assetRef, bundle is still generated */
+      } catch (err) {
+        console.warn(`[studio] export/html: skipping assetRef "${ref}" —`, err);
       }
     }
     return new Response(buildPlayableHtml(graph, { assetDataUris }), {

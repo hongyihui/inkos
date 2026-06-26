@@ -8,9 +8,9 @@ const PLAYER_JS = String.raw`
   var nodeById = {}; (GRAPH.nodes||[]).forEach(function(n){ nodeById[n.id] = n; });
   var endingByNode = {}; (GRAPH.endings||[]).forEach(function(e){ endingByNode[e.nodeId] = e; });
   function evalCond(c){ if(!c) return true; var v = vars[c.var];
-    switch(c.op){ case ">=": return v>=c.value; case "<=": return v<=c.value; case ">": return v>c.value; case "<": return v<c.value; case "==": return v===c.value; case "!=": return v!==c.value; } return true; }
+    switch(c.op){ case ">=": return Number(v)>=Number(c.value); case "<=": return Number(v)<=Number(c.value); case ">": return Number(v)>Number(c.value); case "<": return Number(v)<Number(c.value); case "==": return v===c.value; case "!=": return v!==c.value; } return true; }
   function applyEffects(effects){ (effects||[]).forEach(function(e){
-    if(e.op==="add") vars[e.var]=(vars[e.var]||0)+e.value; else if(e.op==="sub") vars[e.var]=(vars[e.var]||0)-e.value; else vars[e.var]=e.value; }); }
+    if(e.op==="add") vars[e.var]=Number(vars[e.var]||0)+Number(e.value); else if(e.op==="sub") vars[e.var]=Number(vars[e.var]||0)-Number(e.value); else vars[e.var]=e.value; }); }
   function visible(node){ return (node.choices||[]).filter(function(c){ return evalCond(c.condition); }); }
   var root = document.getElementById("if-player");
   function hud(){ var s = Object.keys(vars).map(function(k){ return h(k)+": "+h(String(vars[k])); }).join("  ·  "); return s ? '<div class="hud">'+s+'</div>' : ''; }

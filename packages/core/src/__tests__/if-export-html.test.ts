@@ -44,6 +44,24 @@ describe("buildPlayableHtml", () => {
     expect(html).toContain('&lt;script&gt;BAD&lt;/script&gt;');
   });
 
+  // Determinism parity: relational ops must Number()-coerce both operands (mirrors evaluator.ts)
+  it("player evalCond uses Number() coercion for relational ops (parity with evaluator)", () => {
+    const html = buildPlayableHtml(graph);
+    // All four relational ops must use Number(v) and Number(c.value)
+    expect(html).toMatch(/Number\(v\)\s*>=\s*Number\(c\.value\)/);
+    expect(html).toMatch(/Number\(v\)\s*<=\s*Number\(c\.value\)/);
+    expect(html).toMatch(/Number\(v\)\s*>\s*Number\(c\.value\)/);
+    expect(html).toMatch(/Number\(v\)\s*<\s*Number\(c\.value\)/);
+    // Raw lexical comparison must not appear for relational ops
+    expect(html).not.toMatch(/return v>=c\.value/);
+    expect(html).not.toMatch(/return v<=c\.value/);
+    expect(html).not.toMatch(/return v>c\.value/);
+    expect(html).not.toMatch(/return v<c\.value/);
+    // add/sub effects must Number()-coerce
+    expect(html).toMatch(/Number\(vars\[e\.var\]\|\|0\)\+Number\(e\.value\)/);
+    expect(html).toMatch(/Number\(vars\[e\.var\]\|\|0\)-Number\(e\.value\)/);
+  });
+
   // XSS: Fix 2 — node content embedded in JSON is escaped by esc() so the raw onerror attribute never appears
   it("does not embed raw onerror attribute from node content (Fix 2)", () => {
     const xssGraph = StoryGraphSchema.parse({
