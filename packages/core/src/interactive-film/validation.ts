@@ -154,36 +154,41 @@ export function reviewStoryGraph(graph: StoryGraph): ValidationReport {
   }
 
   // --- P6 new rules ---
-  const { paths } = enumerateRuntimePaths(graph);
+  const { paths, truncated } = enumerateRuntimePaths(graph);
   const reachedNodeIds = new Set<string>();
   for (const p of paths) {
     for (const id of p.nodeIds) reachedNodeIds.add(id);
   }
   const edgeReachable = computeEdgeReachable(graph);
 
-  // GATED_UNREACHABLE: edge-reachable but not runtime-reachable (endings are reported by ENDING_UNREACHABLE)
-  for (const node of graph.nodes) {
-    if (node.type === "start") continue;
-    if (node.type === "ending") continue;
-    if (edgeReachable.has(node.id) && !reachedNodeIds.has(node.id)) {
-      issues.push({
-        code: "GATED_UNREACHABLE",
-        level: "warning",
-        message: `节点「${node.title || node.id}」连边可达，但没有任何满足变量条件的路径能到达——它被一个永远不成立的条件挡住了`,
-        nodeIds: [node.id],
-      });
+  // GATED_UNREACHABLE and ENDING_UNREACHABLE rely on a complete path enumeration.
+  // When enumeration is truncated (>200 paths), the reached-node set is incomplete,
+  // so asserting unreachability would be unsound. Skip both loops in that case.
+  if (!truncated) {
+    // GATED_UNREACHABLE: edge-reachable but not runtime-reachable (endings are reported by ENDING_UNREACHABLE)
+    for (const node of graph.nodes) {
+      if (node.type === "start") continue;
+      if (node.type === "ending") continue;
+      if (edgeReachable.has(node.id) && !reachedNodeIds.has(node.id)) {
+        issues.push({
+          code: "GATED_UNREACHABLE",
+          level: "warning",
+          message: `节点「${node.title || node.id}」连边可达，但没有任何满足变量条件的路径能到达——它被一个永远不成立的条件挡住了`,
+          nodeIds: [node.id],
+        });
+      }
     }
-  }
 
-  // ENDING_UNREACHABLE: check by ending.nodeId presence in reached nodes (handles multiple endings sharing the same node)
-  for (const ending of graph.endings) {
-    if (!reachedNodeIds.has(ending.nodeId)) {
-      issues.push({
-        code: "ENDING_UNREACHABLE",
-        level: "warning",
-        message: `结局「${ending.title}」没有任何真实路径能到达`,
-        nodeIds: [ending.nodeId],
-      });
+    // ENDING_UNREACHABLE: check by ending.nodeId presence in reached nodes (handles multiple endings sharing the same node)
+    for (const ending of graph.endings) {
+      if (!reachedNodeIds.has(ending.nodeId)) {
+        issues.push({
+          code: "ENDING_UNREACHABLE",
+          level: "warning",
+          message: `结局「${ending.title}」没有任何真实路径能到达`,
+          nodeIds: [ending.nodeId],
+        });
+      }
     }
   }
 
@@ -200,10 +205,13 @@ export function reviewStoryGraph(graph: StoryGraph): ValidationReport {
   }
 
   // ISOLATED_NODE (endings are reported by ENDING_UNREACHABLE, not as generic isolated nodes)
+  // Skip nodes that already carry an UNREACHABLE issue from validateStoryGraph — that report
+  // is more informative (BFS-based, not just topology), so the duplicate is noise.
   const incoming = new Set<string>();
   for (const n of graph.nodes) for (const c of n.choices) incoming.add(c.targetNodeId);
   for (const node of graph.nodes) {
     if (node.type !== "start" && node.type !== "ending" && !incoming.has(node.id)) {
+      if (issues.some((i) => i.code === "UNREACHABLE" && (i.nodeIds as readonly string[]).includes(node.id))) continue;
       issues.push({
         code: "ISOLATED_NODE",
         level: "info",

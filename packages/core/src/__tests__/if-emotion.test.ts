@@ -8,6 +8,15 @@ describe("emotion analysis", () => {
     expect(emotionScore("悲伤")).toBeLessThan(0);
     expect(emotionScore("zzz未知词")).toBe(0);
   });
+  it("emotionScore: negation prefix flips valence (Fix 3)", () => {
+    // "不高兴" used to partial-match "高兴" (+0.8) without negation guard → false positive
+    expect(emotionScore("不高兴")).toBeLessThanOrEqual(0);
+    // Sanity: plain "高兴" still positive
+    expect(emotionScore("高兴")).toBeGreaterThan(0);
+    // Other negation prefixes
+    expect(emotionScore("没高兴")).toBeLessThanOrEqual(0);
+    expect(emotionScore("未高兴")).toBeLessThanOrEqual(0);
+  });
   it("nodeEmotion averages dialogue emotions", () => {
     const node = StoryNodeSchema.parse({ id: "n", type: "branch", dialogue: [{ speaker: "a", text: "x", emotion: "喜悦" }, { speaker: "b", text: "y", emotion: "悲伤" }], choices: [] });
     expect(typeof nodeEmotion(node)).toBe("number"); // avg of +/- ≈ near 0

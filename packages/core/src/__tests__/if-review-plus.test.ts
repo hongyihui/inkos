@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reviewStoryGraph } from "../interactive-film/validation.js";
+import { enumerateRuntimePaths } from "../interactive-film/paths.js";
 import { StoryGraphSchema, type StoryGraph } from "../interactive-film/graph-schema.js";
 const g = (over: Record<string, unknown>): StoryGraph => StoryGraphSchema.parse({ schemaVersion: 1, projectId: "p", title: "T", variables: [], nodes: [], endings: [], ...over });
 const codes = (graph: StoryGraph) => reviewStoryGraph(graph).issues.map((i) => i.code);
@@ -31,7 +32,7 @@ describe("reviewStoryGraph new rules", () => {
     expect(codes(graph)).toContain("LINEAR_GRAPH");
   });
 
-  it("ISOLATED_NODE: a non-start node with no incoming edge", () => {
+  it("ISOLATED_NODE: a non-start node with no incoming edge gets UNREACHABLE (from gate) but NOT ISOLATED_NODE (Fix 2 dedup)", () => {
     const graph = g({
       nodes: [
         { id: "s", type: "start", choices: [{ id: "c", text: "go", targetNodeId: "e" }] },
@@ -40,8 +41,12 @@ describe("reviewStoryGraph new rules", () => {
       ],
       endings: [{ id: "g1", nodeId: "e", title: "好", type: "good" }],
     });
-    const issue = reviewStoryGraph(graph).issues.find((i) => i.code === "ISOLATED_NODE");
-    expect(issue?.nodeIds).toContain("orphan");
+    const report = reviewStoryGraph(graph);
+    const c = report.issues.map((i) => i.code);
+    // The gate's BFS-based UNREACHABLE is more informative and already present
+    expect(report.issues.some((i) => i.code === "UNREACHABLE" && i.nodeIds.includes("orphan"))).toBe(true);
+    // ISOLATED_NODE must be suppressed for this node since UNREACHABLE already covers it
+    expect(report.issues.some((i) => i.code === "ISOLATED_NODE" && i.nodeIds.includes("orphan"))).toBe(false);
   });
 
   it("ENDING_UNREACHABLE: gated ending yields exactly that code and NOT also GATED_UNREACHABLE", () => {
@@ -123,6 +128,39 @@ describe("reviewStoryGraph new rules", () => {
       endings: [{ id: "g1", nodeId: "e", title: "好", type: "good" }],
     });
     expect(codes(graph)).not.toContain("LONG_LINEAR_CHAIN");
+  });
+
+  it("truncated enumeration (>200 paths): no false GATED_UNREACHABLE or ENDING_UNREACHABLE (Fix 1)", () => {
+    // 8 binary-branch nodes (b0..b7), each with 2 choices both targeting the next node.
+    // Start (s) → b0 → b1 → ... → b7 → ending (e).
+    // Total paths = 2^8 = 256 > 200, so enumeration truncates.
+    // After truncation, reachedNodeIds is incomplete — neither GATED_UNREACHABLE nor
+    // ENDING_UNREACHABLE should fire because we cannot soundly assert unreachability.
+    const branchNodes = Array.from({ length: 8 }, (_, i) => ({
+      id: `b${i}`,
+      type: "normal" as const,
+      choices: [
+        { id: `b${i}c1`, text: "A", targetNodeId: i < 7 ? `b${i + 1}` : "e" },
+        { id: `b${i}c2`, text: "B", targetNodeId: i < 7 ? `b${i + 1}` : "e" },
+      ],
+    }));
+    const graph = g({
+      nodes: [
+        { id: "s", type: "start", choices: [{ id: "sc", text: "start", targetNodeId: "b0" }] },
+        ...branchNodes,
+        { id: "e", type: "ending", choices: [] },
+      ],
+      endings: [{ id: "end1", nodeId: "e", title: "結局", type: "good" }],
+    });
+
+    // Confirm enumeration truncates
+    const { truncated } = enumerateRuntimePaths(graph);
+    expect(truncated).toBe(true);
+
+    // Confirm neither reachability rule fires (Fix 1)
+    const c = codes(graph);
+    expect(c).not.toContain("GATED_UNREACHABLE");
+    expect(c).not.toContain("ENDING_UNREACHABLE");
   });
 
   it("clean branching graph → none of the new codes", () => {

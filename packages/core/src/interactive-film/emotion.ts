@@ -12,7 +12,16 @@ export function emotionScore(word: string): number {
   if (!w) return 0;
   if (w in EMOTION_LEXICON) return EMOTION_LEXICON[w];
   // partial match: if any lexicon key is contained in the word (e.g. "很悲伤")
-  for (const key of Object.keys(EMOTION_LEXICON)) if (w.includes(key)) return EMOTION_LEXICON[key];
+  // Negation guard: if the character immediately before the matched key is a negation character
+  // (不/没/无/别/未), flip the valence so "不高兴" scores negative rather than positive.
+  for (const key of Object.keys(EMOTION_LEXICON)) {
+    if (w.includes(key)) {
+      const keyIdx = w.indexOf(key);
+      const charBefore = keyIdx > 0 ? w[keyIdx - 1] : "";
+      if ("不没无别未".includes(charBefore)) return -EMOTION_LEXICON[key];
+      return EMOTION_LEXICON[key];
+    }
+  }
   return 0;
 }
 
