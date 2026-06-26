@@ -17,8 +17,8 @@ export interface FlowEdge {
   readonly label: string;
 }
 
-const COL = 260;
-const ROW = 110;
+const COL = 280;
+const ROW = 140;
 
 export function layoutStoryGraph(graph: StoryGraph): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const ids = new Set(graph.nodes.map((n) => n.id));
