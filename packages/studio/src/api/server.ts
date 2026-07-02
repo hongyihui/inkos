@@ -69,8 +69,14 @@ import {
   createSkillRegistry,
   loadConfiguredCapabilitySkills,
   CapabilitySkillManifestSchema,
+  getBuiltinPrompt,
+  listBuiltinPromptPacks,
+  listBuiltinPrompts,
+  loadPromptPackPrompt,
+  promptOverridePath,
   type ActionPayload,
   type ActionSource,
+  type BuiltinPrompt,
   type CapabilitySkillManifest,
   createGenerateCoverTool,
   createInteractiveFilmCreationTool,
@@ -581,6 +587,29 @@ async function loadStudioSkills(root: string) {
     skills: registry.listSkills().map((skill) => toStudioSkill(skill, root, projectSkillIds)),
     diagnostics: configured.diagnostics,
   };
+}
+
+async function toStudioPromptPackPrompt(root: string, prompt: BuiltinPrompt) {
+  const loaded = await loadPromptPackPrompt({ promptId: prompt.id, projectRoot: root });
+  const overridePath = promptOverridePath(root, prompt.id);
+  return {
+    id: prompt.id,
+    packId: prompt.packId,
+    title: prompt.title,
+    defaultContent: prompt.content,
+    content: loaded.content,
+    source: loaded.source,
+    overridden: loaded.source === "project",
+    path: loaded.source === "project" ? relative(root, overridePath) : undefined,
+  };
+}
+
+function normalizeStudioPromptId(value: unknown): string {
+  const promptId = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!promptId || !getBuiltinPrompt(promptId)) {
+    throw new ApiError(404, "PROMPT_PACK_PROMPT_NOT_FOUND", `Prompt pack prompt not found: ${String(value)}`);
+  }
+  return promptId;
 }
 
 async function listProjectSkillIds(root: string): Promise<Set<string>> {
@@ -3136,6 +3165,43 @@ export function createStudioServer(initialConfig: ProjectConfig, root: string, o
   app.get("/api/v1/skills", async (c) => {
     const result = await loadStudioSkills(root);
     return c.json(result);
+  });
+
+  app.get("/api/v1/prompt-packs", async (c) => {
+    const prompts = await Promise.all(
+      listBuiltinPrompts().map((prompt) => toStudioPromptPackPrompt(root, prompt)),
+    );
+    return c.json({
+      packs: listBuiltinPromptPacks(),
+      prompts,
+    });
+  });
+
+  app.put("/api/v1/prompt-packs/:promptId", async (c) => {
+    const promptId = normalizeStudioPromptId(c.req.param("promptId"));
+    const payload = await c.req.json().catch(() => {
+      throw new ApiError(400, "INVALID_PROMPT_PACK_PAYLOAD", "Prompt pack payload must be JSON");
+    });
+    const content = payload && typeof payload === "object" && "content" in payload
+      ? (payload as { readonly content?: unknown }).content
+      : undefined;
+    if (typeof content !== "string") {
+      throw new ApiError(400, "INVALID_PROMPT_PACK_PAYLOAD", "content must be a string");
+    }
+
+    const file = promptOverridePath(root, promptId);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, content, "utf-8");
+    const prompt = listBuiltinPrompts().find((item) => item.id === promptId);
+    return c.json({ prompt: await toStudioPromptPackPrompt(root, prompt!) });
+  });
+
+  app.delete("/api/v1/prompt-packs/:promptId", async (c) => {
+    const promptId = normalizeStudioPromptId(c.req.param("promptId"));
+    const file = promptOverridePath(root, promptId);
+    await rm(file, { force: true });
+    const prompt = listBuiltinPrompts().find((item) => item.id === promptId);
+    return c.json({ prompt: await toStudioPromptPackPrompt(root, prompt!) });
   });
 
   app.post("/api/v1/skills", async (c) => {
