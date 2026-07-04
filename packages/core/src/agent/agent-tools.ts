@@ -503,7 +503,7 @@ const SubAgentParams = Type.Object({
     Type.Literal("reviser"),
     Type.Literal("exporter"),
   ]),
-  instruction: Type.String({ description: "Natural language instruction for the sub-agent" }),
+  instruction: Type.String({ description: "Natural language instruction for the sub-agent. For reviser, this is passed as the one-off revision brief." }),
   bookId: Type.Optional(Type.String({
     description: "Optional book ID. In active-book sessions, omit it to use the current active book; if provided, it must match the current active book. For architect creation, this optionally sets the new book ID.",
   })),
@@ -719,7 +719,7 @@ export function createSubAgentTool(
             const targetBookId = resolveToolBookId("reviser", bookId, activeBookId);
             const resolvedMode: ReviseMode = (mode as ReviseMode) ?? "spot-fix";
             progress(`Revising "${targetBookId}" chapter ${chapterNumber ?? "latest"} in ${resolvedMode} mode...`);
-            const result = await pipeline.reviseDraft(targetBookId, chapterNumber, resolvedMode);
+            const result = await pipeline.reviseDraft(targetBookId, chapterNumber, resolvedMode, instruction);
             const applied = result.applied !== false;
             const resultChapter = result.chapterNumber ?? chapterNumber;
             const details = {
@@ -732,11 +732,28 @@ export function createSubAgentTool(
               wordCount: result.wordCount,
               fixedIssues: result.fixedIssues,
               skippedReason: result.skippedReason,
+              revisionDiagnostics: result.revisionDiagnostics,
             };
             if (!applied) {
               progress(`Revision not applied for "${targetBookId}".`);
+              const diagnostics = result.revisionDiagnostics;
+              const diagnosticText = diagnostics
+                ? [
+                    "",
+                    "Revision gate:",
+                    `- Standard: ${diagnostics.standard}`,
+                    `- Before: blocking=${diagnostics.before.blockingCount}, critical=${diagnostics.before.criticalCount}, aiTell=${diagnostics.before.aiTellCount}`,
+                    `- After: blocking=${diagnostics.after.blockingCount}, critical=${diagnostics.after.criticalCount}, aiTell=${diagnostics.after.aiTellCount}`,
+                    ...(diagnostics.remainingIssues.length > 0
+                      ? [
+                          "- Remaining issues:",
+                          ...diagnostics.remainingIssues.map((issue) => `  - [${issue.severity}] ${issue.category}: ${issue.description}${issue.suggestion ? ` (${issue.suggestion})` : ""}`),
+                        ]
+                      : []),
+                  ].join("\n")
+                : "";
               return textResult(
-                `Revision not applied for "${targetBookId}" chapter ${resultChapter ?? "latest"}: ${result.skippedReason ?? result.status ?? "pipeline kept the original chapter"}.`,
+                `Revision not applied for "${targetBookId}" chapter ${resultChapter ?? "latest"}: ${result.skippedReason ?? result.status ?? "pipeline kept the original chapter"}.${diagnosticText}`,
                 details,
               );
             }

@@ -319,6 +319,25 @@ export interface ReviseResult {
   readonly applied: boolean;
   readonly status: "unchanged" | "ready-for-review" | "audit-failed";
   readonly skippedReason?: string;
+  readonly revisionDiagnostics?: {
+    readonly standard: string;
+    readonly before: {
+      readonly blockingCount: number;
+      readonly criticalCount: number;
+      readonly aiTellCount: number;
+    };
+    readonly after: {
+      readonly blockingCount: number;
+      readonly criticalCount: number;
+      readonly aiTellCount: number;
+    };
+    readonly remainingIssues: ReadonlyArray<{
+      readonly severity: AuditIssue["severity"];
+      readonly category: string;
+      readonly description: string;
+      readonly suggestion?: string;
+    }>;
+  };
   readonly lengthWarnings?: ReadonlyArray<string>;
   readonly lengthTelemetry?: LengthTelemetry;
 }
@@ -1255,7 +1274,7 @@ export class PipelineRunner {
   }
 
   /** Revise the latest (or specified) chapter based on audit issues. */
-  async reviseDraft(bookId: string, chapterNumber?: number, mode: ReviseMode = DEFAULT_REVISE_MODE): Promise<ReviseResult> {
+  async reviseDraft(bookId: string, chapterNumber?: number, mode: ReviseMode = DEFAULT_REVISE_MODE, externalContext?: string): Promise<ReviseResult> {
     const releaseLock = await this.state.acquireBookLock(bookId);
     try {
       const book = await this.state.loadBookConfig(bookId);
@@ -1283,13 +1302,14 @@ export class PipelineRunner {
       const { profile: gp } = await this.loadGenreProfile(book.genre);
       const language = book.language ?? gp.language;
       const countingMode = resolveLengthCountingMode(language);
+      const effectiveExternalContext = externalContext ?? this.config.externalContext;
       const reviseControlInput = (this.config.inputGovernanceMode ?? "v2") === "legacy"
         ? undefined
         : await this.createGovernedArtifacts(
           book,
           bookDir,
           targetChapter,
-          this.config.externalContext,
+          effectiveExternalContext,
           { reuseExistingIntentWhenContextMissing: true },
         );
       const preRevision = await this.evaluateMergedAudit({
@@ -1422,13 +1442,36 @@ export class PipelineRunner {
         && (improvedBlocking || improvedAITells);
 
       if (!shouldApplyRevision) {
+        const remainingIssues = effectivePostRevision.revisionBlockingIssues
+          .filter((issue) => issue.severity === "warning" || issue.severity === "critical")
+          .slice(0, 6)
+          .map((issue) => ({
+            severity: issue.severity,
+            category: issue.category,
+            description: issue.description,
+            ...(issue.suggestion ? { suggestion: issue.suggestion } : {}),
+          }));
         return {
           chapterNumber: targetChapter,
           wordCount: revisionBaseCount,
           fixedIssues: [],
           applied: false,
           status: "unchanged",
-          skippedReason: "Manual revision did not improve merged audit or AI-tell metrics; kept original chapter.",
+          skippedReason: `Manual revision kept original chapter: before blocking=${preRevision.blockingCount}, critical=${preRevision.criticalCount}, aiTell=${preRevision.aiTellCount}; after blocking=${effectivePostRevision.blockingCount}, critical=${effectivePostRevision.criticalCount}, aiTell=${effectivePostRevision.aiTellCount}.`,
+          revisionDiagnostics: {
+            standard: "A revision is applied only when blocking, critical, and AI-tell counts do not worsen, and at least blocking or AI-tell issues improve.",
+            before: {
+              blockingCount: preRevision.blockingCount,
+              criticalCount: preRevision.criticalCount,
+              aiTellCount: preRevision.aiTellCount,
+            },
+            after: {
+              blockingCount: effectivePostRevision.blockingCount,
+              criticalCount: effectivePostRevision.criticalCount,
+              aiTellCount: effectivePostRevision.aiTellCount,
+            },
+            remainingIssues,
+          },
         };
       }
       this.logLengthWarnings(lengthWarnings);

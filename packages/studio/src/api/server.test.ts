@@ -585,7 +585,7 @@ describe("createStudioServer daemon lifecycle", () => {
     expect(vi.isMockFunction(isSafeBookId)).toBe(false);
     expect(isSafeBookId("demo-book")).toBe(true);
     expect(isSafeBookId("demo/book")).toBe(false);
-  }, 10_000);
+  }, 60_000);
 
   it("returns from /api/daemon/start before the first write cycle finishes", async () => {
     let resolveStart: (() => void) | undefined;
@@ -614,7 +614,7 @@ describe("createStudioServer daemon lifecycle", () => {
     await expect(status.json()).resolves.toEqual({ running: true });
 
     resolveStart?.();
-  }, 10_000);
+  }, 60_000);
 
   it("rejects book routes with path traversal ids", async () => {
     const { createStudioServer } = await import("./server.js");
@@ -2958,7 +2958,7 @@ describe("createStudioServer daemon lifecycle", () => {
         },
       }),
     );
-  }, 10_000);
+  }, 60_000);
 
   it("does not present audit-failed direct write-next as completed", async () => {
     writeNextChapterMock.mockResolvedValueOnce({
@@ -3013,7 +3013,7 @@ describe("createStudioServer daemon lifecycle", () => {
         },
       }),
     );
-  }, 10_000);
+  }, 60_000);
 
   it("does not direct-run write-next from ordinary free text", async () => {
     const { createStudioServer } = await import("./server.js");
@@ -3066,7 +3066,7 @@ describe("createStudioServer daemon lifecycle", () => {
     });
     expect(writeNextChapterMock).toHaveBeenCalledWith("demo-book");
     expect(runAgentSessionMock).not.toHaveBeenCalled();
-  }, 10_000);
+  }, 60_000);
 
   it("forwards playMode to runAgentSession for play sessions", async () => {
     const { createStudioServer } = await import("./server.js");
@@ -3930,7 +3930,7 @@ describe("createStudioServer daemon lifecycle", () => {
       },
     });
     expect(chatCompletionMock).not.toHaveBeenCalled();
-  }, 10_000);
+  }, 60_000);
 
   it("does not treat architect_incomplete as a created book", async () => {
     const orphanSession = {

@@ -139,6 +139,13 @@ vi.mock("@mariozechner/pi-ai", async () => {
                 text: "# 第2章\n\n我把账页摊在桌上，冷库的灯一盏盏暗下去。".repeat(80),
               },
             ], timestamp)
+        : prompt === "revision instructions"
+          ? assistant([
+              {
+                type: "text",
+                text: "## 第2章 修改指令\n\n目标：把这一章从润色改成重写，先删掉原来的寒暄，再让主角主动发现账页异常。\n\n执行：保留冷库线索，重写对话，补足动机。".repeat(30),
+              },
+            ], timestamp)
         : prompt === "write next" || allUserText.includes("write next")
           ? assistant([
               {
@@ -760,9 +767,23 @@ describe("runAgentSession cache — bookId switch", () => {
       "raw chapter",
     );
 
-    expect(result.responseText).toContain("没有落盘");
-    expect(result.responseText).toContain("sub_agent(agent=\"writer\")");
+    expect(result.responseText).toContain("没有调用落盘工具");
+    expect(result.responseText).toContain("修改旧章");
     expect(result.responseText).not.toContain("# 第2章");
+  });
+
+  it("does not replace chapter-scoped revision instructions as raw chapter prose", async () => {
+    const model = { provider: "x", id: "y", api: "anthropic-messages" } as any;
+    const pipeline = {} as any;
+
+    const result = await runAgentSession(
+      { sessionId: "book-revision-instruction-session", bookId: "book-a", sessionKind: "book", language: "zh", pipeline, projectRoot, model },
+      "revision instructions",
+    );
+
+    expect(result.responseText).toContain("第2章 修改指令");
+    expect(result.responseText).toContain("把这一章从润色改成重写");
+    expect(result.responseText).not.toContain("没有调用落盘工具");
   });
 
   it("exposes play_edit, play_revise, and play_step after the play world exists for this session", async () => {

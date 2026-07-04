@@ -500,13 +500,29 @@ function extractTextFromAssistant(msg: AssistantMessage): string {
 function looksLikeUnsavedChapterProse(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length < 800) return false;
+  if (looksLikeChapterRevisionPlan(trimmed)) return false;
   return /(^|\n)\s{0,3}#{1,3}\s*(?:第\s*[0-9一二三四五六七八九十百千]+\s*章|Chapter\s+\d+)/i.test(trimmed);
+}
+
+function looksLikeChapterRevisionPlan(text: string): boolean {
+  const headingLines = text
+    .split(/\n+/)
+    .filter((line) => /^\s{0,3}#{1,3}\s*(?:第\s*[0-9一二三四五六七八九十百千]+\s*章|Chapter\s+\d+)/i.test(line))
+    .slice(0, 8);
+  if (headingLines.length === 0) return false;
+  const planSignals = [
+    /修改指令|修订指令|重写指令|执行指令|改稿指令|具体修改|修改方案|修订方案|重写方案/,
+    /问题|目标|处理方式|调整|建议|要求|保留|删除|新增|强化|弱化/,
+    /revision brief|revision plan|rewrite plan|edit instruction|actionable instruction|change request/i,
+  ];
+  return headingLines.some((line) => planSignals.some((signal) => signal.test(line)))
+    || planSignals.some((signal) => signal.test(text.slice(0, 1200)));
 }
 
 function bookRawChapterBoundaryText(language: string): string {
   return language === "zh"
-    ? "这次模型输出了章节正文样式的聊天文本，但没有落盘。写下一章必须调用 sub_agent(agent=\"writer\")，由写作管线生成并保存章节。请重新发送“继续写下一章”，系统会走 writer 工具。"
-    : "The model produced chapter-like prose in chat, but nothing was saved. Writing the next chapter must call sub_agent(agent=\"writer\") so the writing pipeline generates and persists it. Please ask to continue again and the system will use the writer tool.";
+    ? "这次模型输出了疑似章节正文的聊天文本，但没有调用落盘工具。InkOS 不会把聊天正文当成已保存章节：如果要续写新章，请发送“继续写下一章”；如果要修改旧章，请发送“重写/修订第 N 章 + 具体要求”，系统会走 reviser/writer 管线落盘。"
+    : "The model produced chapter-like prose in chat without calling a persistence tool. InkOS will not treat chat prose as a saved chapter. Ask to write the next chapter only when you want to append; ask to rewrite/revise chapter N with concrete requirements when you want to change existing chapters.";
 }
 
 function replaceAssistantText(message: AssistantMessage, text: string): void {
